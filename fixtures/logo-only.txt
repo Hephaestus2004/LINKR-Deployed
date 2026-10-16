@@ -1,0 +1,12 @@
+# logo-only.txt - Business card / restaurant / clinic mode
+template: clean-white
+profile_mode: logo_only
+company: Kura Artisan Coffee & Bakery
+company_logo: /assets/company-logo.svg
+title_link: https://kuracoffee.ph
+location: Poblacion, Makati
+phone: 0917 999 8877
+instagram: instagram.com/kuracoffee
+facebook: facebook.com/kuracoffee.ph
+link_1: View Menu & Order Online | https://kuracoffee.ph/menu
+link_2: Book Table on TableCheck | https://tablecheck.com/kura-coffee

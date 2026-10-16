@@ -1,0 +1,8 @@
+# no-photo-no-logo.txt - Image fallbacks (Initials avatar and no logo)
+template: clean-white
+name: Carlos Ramos
+title: Independent Consultant
+bio: Strategy and business operations advisor.
+phone: 0919 444 3322
+email: carlos@example.com
+linkedin: linkedin.com/in/carlosramos

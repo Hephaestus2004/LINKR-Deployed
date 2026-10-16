@@ -1,0 +1,10 @@
+{
+  "id": "glass-dark",
+  "label": "Glass Dark",
+  "max_quick_actions": 8,
+  "supports_photo": true,
+  "supports_logo_only": true,
+  "supports_bio": true,
+  "best_with": ["photo", "logo"],
+  "preview": "preview.webp"
+}

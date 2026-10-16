@@ -1,0 +1,16 @@
+name = "linkr-d1-backup"
+main = "workers/backup.ts"
+compatibility_date = "2024-09-23"
+workers_dev = false
+
+[triggers]
+crons = ["0 2 * * SUN"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "linkr-db"
+database_id = "5066aa97-a7fd-4fdc-b57a-32b98e9360b0"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "linkr-assets"

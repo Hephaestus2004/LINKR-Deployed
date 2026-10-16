@@ -1,0 +1,12 @@
+# long-text.txt - Maximum character lengths (60-char name, 300-char bio, long email)
+template: clean-white
+name: Maria Esperanza Remedios Victoria Del Rosario-Villanueva
+company: Metropolitan International Architectural Consortia Corporation
+title: Executive Vice President of Urban Planning & Infrastructure Strategy
+title_link: https://example.com/long-url-path-with-multiple-parameters-and-tokens?id=12345
+bio: We specialize in multi-phase urban renewal, transit-oriented development, and climate-resilient architectural solutions across 17 regional metropolitan districts throughout Luzon, Visayas, and Mindanao. Coordinating with public utilities, institutional stakeholders, and municipal governments daily.
+location: Unit 4502, High Street Corporate Plaza Tower 2, 26th Street corner 11th Avenue, Bonifacio Global City, Taguig 1634
+phone: +63 917 123 4567
+email: maria.esperanza.delrosario.villanueva@metropolitanconsortia.example.com
+website: https://metropolitanconsortia.example.com/projects/urban-renewal-manila-2026
+link_1: Comprehensive Master Plan Review PDF Document | https://metropolitanconsortia.example.com/assets/downloads/master-plan.pdf

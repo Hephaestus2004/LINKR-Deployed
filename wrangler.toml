@@ -1,0 +1,25 @@
+name = "linkr"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "public"
+
+[vars]
+ENVIRONMENT = "production"
+BASE_URL = "https://linkr-tap.site"
+DEFAULT_TEMPLATE = "clean-white"
+DOMAIN = "linkr-tap.site"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "linkr-db"
+database_id = "5066aa97-a7fd-4fdc-b57a-32b98e9360b0"
+
+# R2 bucket for profile photos, company logos, QR PNGs
+[[r2_buckets]]
+binding = "R2_STORAGE"
+bucket_name = "linkr-assets"
+
+# Analytics Engine for high-volume scan events without writing to D1 per tap
+# [[analytics_engine_datasets]]
+# binding = "SCAN_ANALYTICS"
+# dataset = "linkr_scans"

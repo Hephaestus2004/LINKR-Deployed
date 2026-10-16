@@ -1,0 +1,38 @@
+# Replace the values below for each new client.
+# Keep one field per line. Optional fields can be deleted.
+name: Your Name
+company: Your Company
+company_logo: assets/company-logo.svg
+title: Your job title
+title_link: https://example.com
+photo: assets/profile-photo.svg
+qr_code: assets/qr-code.svg
+profile_mode: standard
+# Use profile_mode: logo_only when the client wants only the logo in the header.
+# In standard mode, any show_* field can be set to no to hide one element.
+show_name: yes
+show_title: yes
+show_bio: yes
+show_photo: yes
+show_company_logo: yes
+theme: light
+accent: #6f8fa3
+# Optional theme overrides. Delete or leave blank to use the built-in theme.
+# background: #f4f6f8
+# profile_bg: #d9e7ee
+# surface: #ffffff
+# border: #d4dfe5
+# text: #243746
+# muted: #526875
+# action: #6f8fa3
+
+phone: +63 900 000 0000 | Mobile
+email: hello@example.com
+website: https://example.com | Website
+facebook: https://facebook.com/your-page
+instagram: https://instagram.com/your-handle
+linkedin: https://linkedin.com/in/your-handle
+viber: +63 900 000 0000
+whatsapp: +63 900 000 0000
+telegram: @yourhandle
+location: Your business address | Location

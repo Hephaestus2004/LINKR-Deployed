@@ -1,0 +1,15 @@
+# typical.txt - Normal profile with photo, logo, and common links
+template: clean-white
+name: Maria Santos
+company: Santos Creative Studio
+title: Creative Director & Brand Designer
+title_link: https://santoscreative.ph
+bio: Crafting elevated visual identities for modern brands in Manila and beyond.
+location: Bonifacio Global City, Taguig
+photo: /assets/profile-photo.svg
+company_logo: /assets/company-logo.svg
+phone: 0918 888 9999
+email: maria@santoscreative.ph
+instagram: instagram.com/santoscreative
+website: santoscreative.ph | Portfolio
+link_1: Shopee Store | https://shopee.ph/santoscreative

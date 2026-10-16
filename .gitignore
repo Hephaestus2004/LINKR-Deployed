@@ -1,0 +1,11 @@
+node_modules/
+.wrangler/
+dist/
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
+.env.*.local
+*.vcf
+tool_output/

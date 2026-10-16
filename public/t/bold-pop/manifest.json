@@ -1,0 +1,10 @@
+{
+  "id": "bold-pop",
+  "label": "Bold Pop",
+  "max_quick_actions": 6,
+  "supports_photo": true,
+  "supports_logo_only": true,
+  "supports_bio": true,
+  "best_with": ["photo", "logo"],
+  "preview": "preview.webp"
+}

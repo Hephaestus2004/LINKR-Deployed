@@ -1,0 +1,28 @@
+# LINKR profile template
+# Keep one field per line. Optional fields can be removed.
+name: Your Name
+company: Your Company
+company_logo: assets/company-logo.svg
+title: FOUNDER @YOURCOMPANY
+title_link: https://your-company.example
+photo: assets/profile-photo.svg
+qr_code: assets/qr-code.svg
+profile_mode: standard
+
+show_name: yes
+show_title: yes
+show_bio: yes
+show_photo: yes
+show_company_logo: yes
+
+theme: dark
+accent: #6f8fa3
+
+phone: +63 900 000 0000 | Mobile
+email: hello@example.com
+website: https://your-company.example | Website
+facebook: https://facebook.com/your-handle
+instagram: https://instagram.com/your-handle
+linkedin: https://linkedin.com/in/your-handle
+telegram: @your-handle
+location: Your City, PH | Location

@@ -1,0 +1,3 @@
+# redirect.txt - Redirect tier (single social URL destination)
+tier: redirect
+redirect_url: https://instagram.com/linkr.ph

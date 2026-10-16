@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LINKR Admin Console</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/contact-favicon.svg">
+  <link rel="stylesheet" href="/admin/style.css">
+</head>
+<body>
+  <div class="admin-app">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-logo">LR</span>
+        <span class="brand-name">LINKR Admin</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-tab="profiles">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Profiles
+        </button>
+        <button class="nav-item" data-tab="editor">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Profile Editor
+        </button>
+        <button class="nav-item" data-tab="batches">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          Batch Generator
+        </button>
+        <button class="nav-item" data-tab="import-export">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          client.txt I/O
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="status-indicator"></span>
+        <span class="status-text">linkr-tap.site</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content">
+      <!-- Tab 1: Profiles List -->
+      <section id="tab-profiles" class="tab-pane active">
+        <header class="section-header">
+          <div>
+            <h1>Profile Directory</h1>
+            <p class="subtitle">Search, manage, and toggle status of all smart cards.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-refresh-profiles" class="btn btn-secondary">Refresh</button>
+            <button id="btn-new-profile" class="btn btn-primary">+ Create Profile</button>
+          </div>
+        </header>
+
+        <div class="filter-bar">
+          <input type="text" id="filter-search" class="input" placeholder="Search ID, Name...">
+          <select id="filter-status" class="select">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="unassigned">Unassigned (Stock)</option>
+            <option value="suspended">Suspended</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Seq</th>
+                <th>Status</th>
+                <th>Tier</th>
+                <th>Template</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="profiles-table-body">
+              <tr><td colspan="7" class="loading">Loading profiles...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab 2: Profile Editor & Live Preview -->
+      <section id="tab-editor" class="tab-pane">
+        <header class="section-header">
+          <div>
+            <h1 id="editor-title">New Profile</h1>
+            <p class="subtitle">Configure identity, links, theme, and view instant preview.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-save-profile" class="btn btn-primary">Save Profile</button>
+          </div>
+        </header>
+
+        <div class="editor-workspace">
+          <!-- Editor Form -->
+          <div class="editor-form-scroll">
+            <form id="profile-form" class="editor-form">
+              <input type="hidden" id="edit-id">
+
+              <!-- Configuration Card -->
+              <div class="form-card">
+                <h3>Card Configuration</h3>
+                <div class="form-row">
+                  <div class="form-group">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <label>Card ID (Leave blank to generate)</label>
+                      <span id="id-status-badge" style="font-size: 0.75rem; font-weight: 600;"></span>
+                    </div>
+                    <input type="text" id="form-id" class="input" placeholder="e.g. k7x2m9qa" maxlength="10">
+                  </div>
+                  <div class="form-group">
+                    <label>Tier</label>
+                    <select id="form-tier" class="select">
+                      <option value="full">Full Profile (₱300)</option>
+                      <option value="redirect">Redirect Only (₱200)</option>
+                      <option value="direct">Direct Social (₱150)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Template</label>
+                    <select id="form-template" class="select">
+                      <option value="clean-white">Clean White (Light/Dark)</option>
+                      <option value="glass-dark">Glass Dark (Translucent Glass)</option>
+                      <option value="luxury-gold">Luxury Gold (Obsidian & Gold)</option>
+                      <option value="bold-pop">Bold Pop (Neo-Brutalist & Vibrant)</option>
+                      <option value="minimal-slate">Minimal Slate (Scandinavian Clean)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Profile Mode</label>
+                    <select id="form-mode" class="select">
+                      <option value="standard">Standard (Personal + Links)</option>
+                      <option value="logo_only">Logo-Only (Business card mode)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="redirect-url-group" class="form-group" style="display: none;">
+                  <label>Redirect Destination URL</label>
+                  <input type="url" id="form-redirect-url" class="input" placeholder="https://instagram.com/yourhandle">
+                </div>
+              </div>
+
+              <!-- Identity Card -->
+              <div class="form-card">
+                <h3>Identity & Branding</h3>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="form-name" class="input" placeholder="Alex Example" maxlength="60" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Company / Organization</label>
+                    <input type="text" id="form-company" class="input" placeholder="Studio Co." maxlength="80">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" id="form-title" class="input" placeholder="Photographer & Founder" maxlength="80">
+                  </div>
+                  <div class="form-group">
+                    <label>Title Link (Optional external website)</label>
+                    <input type="url" id="form-title-link" class="input" placeholder="https://example.com">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Bio (Short description)</label>
+                  <textarea id="form-bio" class="textarea" rows="2" placeholder="Weddings and events in Metro Manila." maxlength="300"></textarea>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Location (City / Area)</label>
+                    <input type="text" id="form-location" class="input" placeholder="Makati, Metro Manila" maxlength="120">
+                  </div>
+                  <div class="form-group">
+                    <label>Accent Color</label>
+                    <div class="color-picker-row">
+                      <input type="color" id="form-accent-picker" value="#6f91a5">
+                      <input type="text" id="form-accent" class="input" placeholder="#6f91a5">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Photo & Logo Upload Rows -->
+                <div class="form-row">
+                  <!-- Profile Photo Uploader -->
+                  <div class="form-group">
+                    <label>Profile Photo</label>
+                    <div class="image-upload-box">
+                      <img id="photo-preview-thumb" src="/assets/profile-photo.svg" alt="Photo Preview" class="image-thumb">
+                      <div class="upload-controls">
+                        <label class="btn btn-sm btn-secondary file-btn">
+                          Choose Photo
+                          <input type="file" id="photo-file-input" accept="image/*" style="display:none;">
+                        </label>
+                        <button type="button" id="btn-remove-photo" class="btn btn-sm btn-danger">Clear</button>
+                      </div>
+                    </div>
+                    <input type="text" id="form-photo" class="input" placeholder="Or paste image URL" style="margin-top: 6px; font-size: 0.8rem;">
+                  </div>
+
+                  <!-- Company Logo Uploader -->
+                  <div class="form-group">
+                    <label>Company Logo (Optional)</label>
+                    <div class="image-upload-box">
+                      <img id="logo-preview-thumb" src="/assets/company-logo.svg" alt="Logo Preview" class="image-thumb logo-thumb">
+                      <div class="upload-controls">
+                        <label class="btn btn-sm btn-secondary file-btn">
+                          Choose Logo
+                          <input type="file" id="logo-file-input" accept="image/*" style="display:none;">
+                        </label>
+                        <button type="button" id="btn-remove-logo" class="btn btn-sm btn-danger">Clear</button>
+                      </div>
+                    </div>
+                    <input type="text" id="form-logo" class="input" placeholder="Or paste logo URL" style="margin-top: 6px; font-size: 0.8rem;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Links & Contacts -->
+              <div class="form-card">
+                <div class="card-header-flex">
+                  <h3>Links & Contacts</h3>
+                  <button type="button" id="btn-add-link" class="btn btn-sm btn-secondary">+ Add Link</button>
+                </div>
+                <div id="links-container" class="links-builder"></div>
+              </div>
+            </form>
+          </div>
+
+          <!-- Live Interactive Mobile Preview -->
+          <div class="preview-panel">
+            <div class="phone-mockup">
+              <div class="phone-notch"></div>
+              <iframe id="preview-iframe" class="phone-iframe" src="/t/clean-white/index.html"></iframe>
+            </div>
+            <div class="preview-controls">
+              <span class="preview-label">Live Preview</span>
+              <button id="btn-refresh-preview" class="btn btn-sm btn-secondary">Sync</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Batch Generator -->
+      <section id="tab-batches" class="tab-pane">
+        <header class="section-header">
+          <div>
+            <h1>Pre-generated Stock Batches</h1>
+            <p class="subtitle">Create batches of stock IDs for sticker printing and NFC chip encoding.</p>
+          </div>
+        </header>
+
+        <div class="batch-grid">
+          <div class="form-card">
+            <h3>Generate New Batch</h3>
+            <form id="batch-form">
+              <div class="form-group">
+                <label>Batch Label</label>
+                <input type="text" id="batch-label" class="input" placeholder="Batch-2026-10-A" required>
+              </div>
+              <div class="form-group">
+                <label>Batch Size (Units to generate)</label>
+                <select id="batch-size" class="select">
+                  <option value="25">25 cards</option>
+                  <option value="50" selected>50 cards</option>
+                  <option value="100">100 cards</option>
+                  <option value="200">200 cards</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Target Tier</label>
+                <select id="batch-tier" class="select">
+                  <option value="full">Full Profile (₱300)</option>
+                  <option value="redirect">Redirect Sticker (₱200)</option>
+                </select>
+              </div>
+              <button type="submit" id="btn-generate-batch" class="btn btn-primary" style="margin-top: 10px;">
+                Generate Stock IDs
+              </button>
+            </form>
+          </div>
+
+          <div class="form-card">
+            <h3>Batch Export & Output</h3>
+            <p id="batch-output-status" class="subtitle">Select or generate a batch to export.</p>
+            <div id="batch-result-actions" style="display: none; margin-top: 15px;">
+              <button id="btn-download-csv" class="btn btn-secondary">Download CSV (id, url)</button>
+              <textarea id="batch-csv-preview" class="textarea" rows="8" readonly style="margin-top: 10px; font-family: monospace; font-size: 0.8rem;"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 4: client.txt I/O -->
+      <section id="tab-import-export" class="tab-pane">
+        <header class="section-header">
+          <div>
+            <h1>client.txt Importer & Exporter</h1>
+            <p class="subtitle">Import legacy client.txt files or export current profile data.</p>
+          </div>
+        </header>
+
+        <div class="io-grid">
+          <div class="form-card">
+            <div class="card-header-flex">
+              <h3>Input / Output client.txt</h3>
+              <div class="card-actions">
+                <button id="btn-parse-txt" class="btn btn-secondary btn-sm">Parse into Editor</button>
+                <button id="btn-export-txt" class="btn btn-secondary btn-sm">Export from Editor</button>
+              </div>
+            </div>
+            <textarea id="client-txt-area" class="textarea" rows="18" placeholder="name: Alex Example&#10;title: Photographer&#10;phone: 0917 123 4567&#10;email: alex@example.com"></textarea>
+            <div id="txt-warnings" class="warnings-box" style="display: none;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/admin/app.js"></script>
+</body>
+</html>

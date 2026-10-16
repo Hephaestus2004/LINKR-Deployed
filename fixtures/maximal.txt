@@ -1,0 +1,28 @@
+# maximal.txt - Every field filled with 12+ links
+template: glass-dark
+profile_mode: standard
+name: Alexander Gabriel Mendoza
+company: Nexus Ventures Philippines
+title: Managing Partner & Principal Architect
+title_link: https://nexusventures.ph
+bio: Seed-stage investments, cross-border fintech, and smart card distribution networks across Southeast Asia. Open for collaborative projects and advisory boards.
+location: Makati Central Business District, PH
+photo: /assets/profile-photo.svg
+company_logo: /assets/company-logo.svg
+theme: dark
+accent: #8eb8cd
+phone: 0917 555 1234
+email: alexander@nexusventures.ph
+website: nexusventures.ph
+facebook: facebook.com/alexandermendoza
+instagram: instagram.com/alex.nexus
+tiktok: tiktok.com/@alexnexus
+youtube: youtube.com/@nexusventures
+linkedin: linkedin.com/in/alexandermendoza
+github: github.com/alexandermendoza
+messenger: m.me/alexandermendoza
+whatsapp: 0917 555 1234
+telegram: @alexandermendoza
+viber: 0917 555 1234
+link_1: Schedule Meeting via Calendly | https://calendly.com/alexandermendoza
+link_2: Download Pitch Deck | https://nexusventures.ph/deck

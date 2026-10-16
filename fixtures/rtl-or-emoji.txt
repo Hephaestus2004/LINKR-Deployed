@@ -1,0 +1,15 @@
+# rtl-or-emoji.txt - Emoji, Filipino diacritics (ñ), and multilingual test
+template: glass-dark
+name: Niño "Junjun" Dela Peña 🚀
+company: Bayanihan Web Solutions 🇵🇭
+title: Senior Engineer & Builder 💻⚡
+bio: Passionate about Web3, NFC tech, and open-source in the PH! Kumusta! Mag-konek tayo! ✨
+location: Parañaque City, Metro Manila
+photo: /assets/profile-photo.svg
+phone: 0917 777 6655
+email: nino.delapena@example.com
+website: https://bayanihan.ph
+github: github.com/ninodelapena
+telegram: @ninodelapena
+link_1: Shopee Store 🛍️ | https://shopee.ph/bayanihan
+link_2: Support via GCash / Maya 💙 | https://bayanihan.ph/tip

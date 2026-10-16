@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client contact profile</title>
+  <link rel="icon" type="image/svg+xml" href="assets/contact-favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <div class="profile-flip">
+      <div id="profile-inner" class="profile-inner">
+        <header class="profile profile-face profile-front">
+          <button class="qr-toggle" type="button" aria-label="Show QR code" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 20h2"/></svg>
+          </button>
+          <a id="company-logo-link" class="company-logo-link" href="#" target="_blank" rel="noopener" aria-label="Company logo">
+            <img id="company-logo" class="company-logo" src="assets/company-logo.svg" alt="Company logo" hidden>
+          </a>
+          <div class="profile-main">
+            <div class="profile-info">
+              <h1 id="name">Your Name</h1>
+              <p id="title"></p>
+              <p id="bio"></p>
+            </div>
+            <img id="photo" class="photo" src="assets/profile-photo.svg" alt="Profile photo" hidden>
+          </div>
+          <nav id="quick-actions" class="quick-actions" aria-label="Quick actions"></nav>
+        </header>
+
+        <section class="profile profile-face profile-back" aria-hidden="true">
+          <button class="qr-toggle" type="button" aria-label="Show profile" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/><path d="M9 12h12"/></svg>
+          </button>
+          <p class="qr-title">Scan to connect</p>
+          <img class="profile-qr" src="assets/qr-code.svg" alt="QR code for contact profile">
+          <p class="qr-hint">Tap the arrow to return</p>
+        </section>
+      </div>
+    </div>
+
+    <button id="save" class="save" type="button" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      <span>Save contact</span>
+    </button>
+    <a id="vcf-fallback" class="fallback" href="#" hidden>Download contact file instead</a>
+
+    <ul id="links" class="links"></ul>
+  </main>
+
+  <footer>© <a href="https://linkr-tap-connect.vercel.app/" target="_blank" rel="noopener">linkr</a> 2026</footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

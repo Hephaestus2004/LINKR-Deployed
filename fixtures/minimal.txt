@@ -1,0 +1,3 @@
+# minimal.txt - Name plus one link
+name: Juan dela Cruz
+phone: 0917 123 4567

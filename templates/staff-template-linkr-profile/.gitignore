@@ -1,0 +1,17 @@
+# Local development
+.vscode/
+.idea/
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Generated contact exports
+*.vcf
