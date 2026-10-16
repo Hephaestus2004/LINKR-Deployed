@@ -10,6 +10,7 @@ export function renderProfile(profile) {
 
   const show = profile.show || {};
   const isLogoOnly = profile.profile_mode === 'logo_only';
+  const hasCompanyLogo = Boolean(profile.company_logo) && !/(?:^|\/)assets\/company-logo\.svg(?:[?#].*)?$/.test(profile.company_logo);
 
   // Apply Theme (defaults to dark mode for glass-dark)
   const theme = { mode: 'dark', ...profile.theme };
@@ -91,7 +92,7 @@ export function renderProfile(profile) {
   const logoLinkEl = document.getElementById('company-logo-link');
   const logoEl = document.getElementById('company-logo');
   if (logoEl && logoLinkEl) {
-    if (show.company_logo !== false && profile.company_logo) {
+    if (show.company_logo !== false && hasCompanyLogo) {
       logoEl.src = profile.company_logo;
       logoEl.alt = profile.company || 'Company logo';
       if (profile.title_link) {
@@ -242,6 +243,8 @@ export function renderProfile(profile) {
 }
 
 // Auto-boot: If profile injected by server, render immediately; else fetch from API or client.txt
+window.renderProfile = renderProfile;
+
 if (window.__LINKR_PROFILE__) {
   renderProfile(window.__LINKR_PROFILE__);
 } else {

@@ -3,6 +3,10 @@
 
 import { parseClientText, serializeClientText } from '/shared/parse.js';
 
+const AVAILABLE_TEMPLATES = new Set(['clean-white', 'glass-dark', 'luxury-gold', 'bold-pop']);
+const normalizeTemplate = (template) => AVAILABLE_TEMPLATES.has(template) ? template : 'clean-white';
+let isSavingProfile = false;
+
 let currentProfiles = [];
 let activeProfileData = {
   schema: 1,
@@ -14,7 +18,7 @@ let activeProfileData = {
   bio: 'Weddings and events in Metro Manila.',
   location: 'Makati, Metro Manila',
   photo: '/assets/profile-photo.svg',
-  company_logo: '/assets/company-logo.svg',
+  company_logo: '',
   theme: { mode: 'light', accent: '#6f91a5' },
   links: [
     { type: 'phone', value: '0917 123 4567' },
@@ -93,6 +97,8 @@ function renderProfilesTable(profiles) {
 
 // 3. Editor Setup & Real-time Live Preview
 function setupEditor() {
+  const previewIframe = document.getElementById('preview-iframe');
+  previewIframe.addEventListener('load', syncPreview);
   populateForm(activeProfileData);
 
   document.getElementById('profile-form').addEventListener('input', () => {
@@ -101,10 +107,9 @@ function setupEditor() {
   });
 
   document.getElementById('form-template').addEventListener('change', () => {
-    const tmpl = document.getElementById('form-template').value;
-    const iframe = document.getElementById('preview-iframe');
-    iframe.src = `/t/${tmpl}/index.html`;
-    iframe.onload = () => syncPreview();
+    updateDataFromForm();
+    const tmpl = normalizeTemplate(document.getElementById('form-template').value);
+    previewIframe.src = `/t/${tmpl}/index.html`;
   });
 
   document.getElementById('form-tier').addEventListener('change', (e) => {
@@ -151,14 +156,14 @@ function setupEditor() {
         const data = await res.json();
         if (data.exists) {
           if (data.status === 'unassigned' || data.status === 'assigned') {
-            idBadge.textContent = '🔵 Stock card ready';
+            idBadge.textContent = 'Stock card ready';
             idBadge.className = 'stock';
           } else {
-            idBadge.textContent = '🔴 Already active';
+            idBadge.textContent = 'Already active';
             idBadge.className = 'taken';
           }
         } else {
-          idBadge.textContent = '🟢 Available (New ID)';
+          idBadge.textContent = 'Available (New ID)';
           idBadge.className = 'available';
         }
       } catch (err) {
@@ -198,25 +203,7 @@ function setupEditor() {
   document.getElementById('btn-save-profile').addEventListener('click', saveProfile);
   document.getElementById('btn-refresh-preview').addEventListener('click', syncPreview);
   document.getElementById('btn-new-profile').addEventListener('click', () => {
-    document.getElementById('editor-title').textContent = 'New Profile';
-    document.getElementById('edit-id').value = '';
-    document.getElementById('form-id').value = '';
-    document.getElementById('id-status-badge').textContent = '';
-    document.getElementById('photo-preview-thumb').src = '/assets/profile-photo.svg';
-    document.getElementById('logo-preview-thumb').src = '/assets/company-logo.svg';
-    populateForm({
-      schema: 1,
-      template: 'clean-white',
-      profile_mode: 'standard',
-      name: '',
-      company: '',
-      title: '',
-      bio: '',
-      location: '',
-      photo: '',
-      company_logo: '',
-      links: [{ type: 'phone', value: '' }]
-    });
+    resetNewProfileForm();
     document.querySelector('[data-tab="editor"]').click();
   });
 
@@ -319,11 +306,16 @@ function populateForm(data) {
   document.getElementById('form-photo').value = photo;
   document.getElementById('photo-preview-thumb').src = photo || '/assets/profile-photo.svg';
 
-  const logo = data.company_logo || '';
+  const logo = isPlaceholderCompanyLogo(data.company_logo) ? '' : (data.company_logo || '');
+  data.company_logo = logo;
   document.getElementById('form-logo').value = logo;
   document.getElementById('logo-preview-thumb').src = logo || '/assets/company-logo.svg';
 
-  document.getElementById('form-template').value = data.template || 'clean-white';
+  data.template = normalizeTemplate(data.template);
+  document.getElementById('form-template').value = data.template;
+  const previewIframe = document.getElementById('preview-iframe');
+  const previewUrl = `/t/${data.template}/index.html`;
+  if (previewIframe.getAttribute('src') !== previewUrl) previewIframe.src = previewUrl;
   document.getElementById('form-mode').value = data.profile_mode || 'standard';
   document.getElementById('form-redirect-url').value = data.redirect_url || '';
 
@@ -343,6 +335,39 @@ function populateForm(data) {
   }
 
   syncPreview();
+}
+
+function isPlaceholderCompanyLogo(value) {
+  return typeof value === 'string' && /(?:^|\/)assets\/company-logo\.svg(?:[?#].*)?$/.test(value);
+}
+
+function resetNewProfileForm() {
+  document.getElementById('editor-title').textContent = 'New Profile';
+  document.getElementById('edit-id').value = '';
+  document.getElementById('form-id').value = '';
+  document.getElementById('id-status-badge').textContent = '';
+  document.getElementById('form-tier').value = 'full';
+  document.getElementById('redirect-url-group').style.display = 'none';
+  for (const inputId of ['photo-file-input', 'logo-file-input', 'qr-file-input']) {
+    const input = document.getElementById(inputId);
+    if (input) input.value = '';
+  }
+  populateForm({
+    schema: 1,
+    template: 'clean-white',
+    profile_mode: 'standard',
+    name: '',
+    company: '',
+    title: '',
+    title_link: '',
+    bio: '',
+    location: '',
+    photo: '',
+    company_logo: '',
+    qr_code: '',
+    theme: { mode: 'light', accent: '#6f91a5' },
+    links: [{ type: 'phone', value: '' }]
+  });
 }
 
 function updateDataFromForm() {
@@ -381,13 +406,10 @@ function syncPreview() {
   const iframe = document.getElementById('preview-iframe');
   if (iframe && iframe.contentWindow) {
     try {
-      if (typeof iframe.contentWindow.renderProfile === 'function') {
-        iframe.contentWindow.renderProfile(activeProfileData);
-      } else {
-        iframe.contentWindow.__LINKR_PROFILE__ = activeProfileData;
-      }
+      iframe.contentWindow.__LINKR_PROFILE__ = activeProfileData;
+      iframe.contentWindow.renderProfile?.(activeProfileData);
     } catch (e) {
-      // Cross-origin fallback
+      console.warn('Live preview could not be updated', e);
     }
   }
 }
@@ -413,6 +435,10 @@ window.editProfile = async function(id) {
 };
 
 async function saveProfile() {
+  if (isSavingProfile) return;
+  isSavingProfile = true;
+  const saveButton = document.getElementById('btn-save-profile');
+  saveButton.disabled = true;
   updateDataFromForm();
 
   const editId = document.getElementById('edit-id').value.trim();
@@ -443,15 +469,18 @@ async function saveProfile() {
       return;
     }
 
-    alert(`Profile saved successfully!\nCard ID: ${data.id}\nLive URL: ${data.url}`);
-    document.getElementById('edit-id').value = data.id;
-    document.getElementById('form-id').value = data.id;
-    document.getElementById('editor-title').textContent = `Editing: ${data.id}`;
-    document.getElementById('id-status-badge').textContent = 'Saved';
-    document.getElementById('id-status-badge').className = 'available';
-    loadProfiles();
+    alert(`Profile ${isNew ? 'created' : 'updated'} successfully!\nCard ID: ${data.id}\nLive URL: ${data.url}`);
+    if (isNew) {
+      resetNewProfileForm();
+    } else {
+      document.getElementById('id-status-badge').textContent = 'Saved';
+    }
+    await loadProfiles();
   } catch (err) {
     alert('Network error saving profile: ' + err.message);
+  } finally {
+    isSavingProfile = false;
+    saveButton.disabled = false;
   }
 }
 

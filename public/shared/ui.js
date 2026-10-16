@@ -29,7 +29,8 @@ export function setupProfileFlip() {
   const front = document.querySelector('.profile-front');
   const back = document.querySelector('.profile-back');
 
-  if (!inner || !buttons.length) return;
+  if (!inner || !buttons.length || inner.dataset.flipInitialized === 'true') return;
+  inner.dataset.flipInitialized = 'true';
 
   buttons.forEach(button => {
     button.addEventListener('click', () => {

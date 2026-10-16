@@ -37,26 +37,24 @@ body {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 24px 16px;
+  padding: 16px 14px;
   flex-shrink: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 32px;
-  padding-left: 8px;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-left: 6px;
 }
 
 .brand-logo {
-  background: var(--accent-gradient);
-  color: #071016;
-  font-weight: 800;
-  font-size: 0.9rem;
-  padding: 6px 10px;
-  border-radius: 8px;
-  letter-spacing: 0.05em;
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 9px;
 }
 
 .brand-name {
@@ -117,13 +115,6 @@ body {
   font-size: 0.8rem;
   color: var(--text-dim);
   border-top: 1px solid var(--border-color);
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--success);
 }
 
 /* Content Area */
@@ -499,6 +490,4 @@ body {
   margin: 0;
 }
 
-#id-status-badge.available { color: var(--success); }
-#id-status-badge.stock { color: var(--accent); }
-#id-status-badge.taken { color: var(--danger); }
+#id-status-badge { color: var(--text-muted); font-weight: 400 !important; }

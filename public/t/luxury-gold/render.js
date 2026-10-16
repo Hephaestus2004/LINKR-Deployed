@@ -10,6 +10,7 @@ export function renderProfile(profile) {
 
   const show = profile.show || {};
   const isLogoOnly = profile.profile_mode === 'logo_only';
+  const hasCompanyLogo = Boolean(profile.company_logo) && !/(?:^|\/)assets\/company-logo\.svg(?:[?#].*)?$/.test(profile.company_logo);
 
   const theme = { mode: 'dark', accent: '#d4af37', ...profile.theme };
   applyTheme(theme);
@@ -81,7 +82,7 @@ export function renderProfile(profile) {
   const logoLinkEl = document.getElementById('company-logo-link');
   const logoEl = document.getElementById('company-logo');
   if (logoEl && logoLinkEl) {
-    if (show.company_logo !== false && profile.company_logo) {
+    if (show.company_logo !== false && hasCompanyLogo) {
       logoEl.src = profile.company_logo;
       logoEl.alt = profile.company || 'Company logo';
       if (profile.title_link) logoLinkEl.href = profile.title_link;
@@ -208,6 +209,8 @@ export function renderProfile(profile) {
   setupSaveContact(document.getElementById('save'), document.getElementById('vcf-fallback'), profile);
   setupProfileFlip();
 }
+
+window.renderProfile = renderProfile;
 
 if (window.__LINKR_PROFILE__) {
   renderProfile(window.__LINKR_PROFILE__);
