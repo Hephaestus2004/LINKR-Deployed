@@ -58,7 +58,7 @@ async function loadProfiles() {
   tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading profiles...</td></tr>';
 
   try {
-    const url = statusFilter ? `/api/admin/profiles?status=${statusFilter}` : '/api/admin/profiles';
+    const url = statusFilter ? `/admin/api/admin/profiles?status=${statusFilter}` : '/admin/api/admin/profiles';
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -148,7 +148,7 @@ function setupEditor() {
 
     idCheckTimeout = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/admin/profiles?check_id=${encodeURIComponent(val)}`);
+        const res = await fetch(`/admin/api/admin/profiles?check_id=${encodeURIComponent(val)}`);
         const data = await res.json();
         if (data.exists) {
           if (data.status === 'unassigned' || data.status === 'assigned') {
@@ -412,7 +412,7 @@ function syncPreview() {
 
 window.editProfile = async function(id) {
   try {
-    const res = await fetch(`/api/admin/profiles?id=${id}`);
+    const res = await fetch(`/admin/api/admin/profiles?id=${id}`);
     if (!res.ok) throw new Error('Failed to load profile');
     const { profile, data } = await res.json();
 
@@ -449,7 +449,7 @@ async function saveProfile() {
   };
 
   try {
-    const res = await fetch('/api/admin/profiles', {
+    const res = await fetch('/admin/api/admin/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -487,7 +487,7 @@ function setupBatchGenerator() {
     btn.textContent = 'Generating...';
 
     try {
-      const res = await fetch('/api/admin/batches', {
+      const res = await fetch('/admin/api/admin/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ label, size, tier })
