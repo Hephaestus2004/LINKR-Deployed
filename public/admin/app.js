@@ -279,6 +279,7 @@ function setupImageUploader(fileInputId, textInputId, previewImgId, maxWidth, ma
     reader.readAsDataURL(file);
     fileInput.value = '';
   });
+}
 
 function addLinkRow(link = { type: 'custom', value: '', label: '' }) {
   const container = document.getElementById('links-container');
