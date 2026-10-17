@@ -15,30 +15,35 @@ export function validateProfile(profile: ProfileData, tier: string = 'full'): Va
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // 1. Redirect Tier check
-  if (tier === 'redirect') {
-    if (!profile.redirect_url) {
-      errors.push('Redirect tier requires a valid "redirect_url".');
+  if (tier === 'direct' || tier === 'redirect') {
+    if (!profile.name?.trim()) errors.push('Client name is required.');
+    const links = Array.isArray(profile.links) ? profile.links : [];
+    if (links.length !== 1 || !links[0]?.value?.trim()) {
+      errors.push('Direct and redirect tiers require one client social or destination link.');
     } else {
+      const value = links[0].value.trim();
       try {
-        const u = new URL(profile.redirect_url);
-        if (!['http:', 'https:'].includes(u.protocol)) {
-          errors.push('redirect_url must be an http or https URL.');
-        }
+        const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+        if (!['http:', 'https:'].includes(url.protocol)) errors.push('The client link must use HTTP or HTTPS.');
       } catch {
-        errors.push('redirect_url is malformed.');
+        errors.push('The client link must be a valid URL.');
+      }
+    }
+    if (tier === 'redirect') {
+      try {
+        const target = new URL(profile.redirect_url || '');
+        if (!['http:', 'https:'].includes(target.protocol)) errors.push('Redirect destination must use HTTP or HTTPS.');
+      } catch {
+        errors.push('Redirect tier requires a valid destination URL.');
       }
     }
     return { valid: errors.length === 0, errors, warnings };
   }
 
-  // 2. Minimum viable profile: name OR company_logo AND at least one link
+  // 1. Redirect Tier check
+  // Minimum viable profile: name AND at least one link; logo is optional.
   const hasName = Boolean(profile.name && profile.name.trim().length > 0);
-  const hasLogo = Boolean(profile.company_logo && profile.company_logo.trim().length > 0);
-
-  if (!hasName && !hasLogo) {
-    errors.push('Minimum viable profile requires either "name" or "company_logo".');
-  }
+  if (!hasName) errors.push('A client name is required.');
 
   const links = Array.isArray(profile.links) ? profile.links : [];
   if (links.length === 0) {

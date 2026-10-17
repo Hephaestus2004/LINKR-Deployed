@@ -6,6 +6,160 @@ import { parseClientText, serializeClientText } from '/shared/parse.js';
 const AVAILABLE_TEMPLATES = new Set(['clean-white', 'glass-dark', 'luxury-gold', 'bold-pop']);
 const normalizeTemplate = (template) => AVAILABLE_TEMPLATES.has(template) ? template : 'clean-white';
 let isSavingProfile = false;
+let qrPreviewTimer = null;
+let qrPreviewRevision = 0;
+let qrDownloadData = { standard: null, transparent: null };
+
+const QR_LOGO_URL = '/assets/linkr-qr-logo.png';
+const QR_PROFILE_BASE_URL = 'https://linkr-tap.site/u/';
+const QR_ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+
+function normalizeQrId(value) {
+  return String(value || '').trim().toLowerCase().replace(/[ilo]/g, character => character === 'o' ? '0' : '1');
+}
+
+function generateCardId() {
+  const random = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(random, byte => QR_ID_ALPHABET[byte % QR_ID_ALPHABET.length]).join('');
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius, fill, stroke, lineWidth = 0) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
+}
+
+async function generateStyledQr(profileUrl, format = 'standard') {
+  if (!window.QRCode?.toCanvas) throw new Error('The QR encoder did not load. Refresh the admin page and try again.');
+
+  const transparent = format === 'transparent';
+  const foreground = transparent ? '#ffffff' : '#000000';
+  const background = transparent ? '#ffffff00' : '#ffffff';
+  const qr = window.QRCode.create(profileUrl, { errorCorrectionLevel: 'H' });
+  const canvas = document.createElement('canvas');
+  await window.QRCode.toCanvas(canvas, profileUrl, {
+    errorCorrectionLevel: 'H',
+    margin: 4,
+    width: 640,
+    color: { dark: foreground, light: background }
+  });
+
+  const ctx = canvas.getContext('2d');
+  const moduleCount = qr.modules.size;
+  const quietZone = 4;
+  const unit = canvas.width / (moduleCount + quietZone * 2);
+  const eyeSize = unit * 7;
+  const eyes = [
+    [quietZone, quietZone],
+    [quietZone + moduleCount - 7, quietZone],
+    [quietZone, quietZone + moduleCount - 7]
+  ];
+
+  eyes.forEach(([col, row]) => {
+    const x = col * unit;
+    const y = row * unit;
+    if (transparent) ctx.clearRect(x, y, eyeSize, eyeSize);
+    else {
+      ctx.fillStyle = background;
+      ctx.fillRect(x, y, eyeSize, eyeSize);
+    }
+    drawRoundedRect(ctx, x + unit / 2, y + unit / 2, eyeSize - unit, eyeSize - unit, unit * 2, null, foreground, unit);
+    drawRoundedRect(ctx, x + unit * 2, y + unit * 2, unit * 3, unit * 3, unit * 0.7, foreground);
+  });
+
+  if (transparent) return canvas.toDataURL('image/png');
+
+  const logo = new Image();
+  logo.src = QR_LOGO_URL;
+  try {
+    await logo.decode();
+  } catch {
+    // The QR remains scannable without the optional centered brand mark.
+    return canvas.toDataURL('image/png');
+  }
+  const panelSize = canvas.width * 0.22;
+  const logoSize = canvas.width * 0.17;
+  const panelX = (canvas.width - panelSize) / 2;
+  const panelY = (canvas.height - panelSize) / 2;
+  drawRoundedRect(ctx, panelX, panelY, panelSize, panelSize, panelSize * 0.13, '#000000');
+  ctx.drawImage(logo, (canvas.width - logoSize) / 2, (canvas.height - logoSize) / 2, logoSize, logoSize);
+
+  return canvas.toDataURL('image/png');
+}
+
+function displayGeneratedQrs(standard, transparent, id) {
+  qrDownloadData = { standard, transparent };
+  for (const [format, dataUrl] of Object.entries(qrDownloadData)) {
+    const image = document.getElementById(`qr-preview-${format}`);
+    image.src = dataUrl;
+    image.hidden = false;
+    document.getElementById(`btn-download-qr-${format}`).hidden = false;
+  }
+  document.getElementById('qr-preview-status').textContent = `QR codes ready for https://linkr-tap.site/u/${id}`;
+}
+
+function queueQrPreview() {
+  clearTimeout(qrPreviewTimer);
+  const id = normalizeQrId(document.getElementById('edit-id').value || document.getElementById('form-id').value);
+  const status = document.getElementById('qr-preview-status');
+  const revision = ++qrPreviewRevision;
+  const clearQrPreviews = () => {
+    qrDownloadData = { standard: null, transparent: null };
+    for (const format of ['standard', 'transparent']) {
+      document.getElementById(`qr-preview-${format}`).hidden = true;
+      document.getElementById(`btn-download-qr-${format}`).hidden = true;
+    }
+  };
+
+  if (document.getElementById('form-tier').value === 'direct') {
+    activeProfileData.qr_code = null;
+    clearQrPreviews();
+    status.textContent = 'Direct social records reserve the ID and do not publish a profile QR.';
+    syncPreview();
+    return;
+  }
+
+  if (!id) {
+    activeProfileData.qr_code = null;
+    clearQrPreviews();
+    status.textContent = 'A branded QR code will be generated for this profile when it is saved.';
+    syncPreview();
+    return;
+  }
+  if (!/^[0-9a-km-z]{7,10}$/.test(id)) {
+    activeProfileData.qr_code = null;
+    clearQrPreviews();
+    status.textContent = 'Enter a valid 7–10 character card ID to preview its QR code.';
+    syncPreview();
+    return;
+  }
+
+  status.textContent = 'Generating branded QR code…';
+  clearQrPreviews();
+  qrPreviewTimer = setTimeout(async () => {
+    try {
+      const [standard, transparent] = await Promise.all([
+        generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'standard'),
+        generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent')
+      ]);
+      if (revision !== qrPreviewRevision) return;
+      activeProfileData.qr_code = standard;
+      displayGeneratedQrs(standard, transparent, id);
+      syncPreview();
+    } catch (error) {
+      if (revision !== qrPreviewRevision) return;
+      clearQrPreviews();
+      status.textContent = error.message || 'Could not generate the profile QR code.';
+    }
+  }, 120);
+}
 
 let currentProfiles = [];
 let activeProfileData = {
@@ -84,13 +238,14 @@ function renderProfilesTable(profiles) {
     <tr>
       <td><code>${p.id}</code></td>
       <td>#${p.seq}</td>
-      <td><span class="badge badge-${p.status}">${p.status}</span></td>
+      <td><span class="badge badge-${p.status}">${p.tier === 'direct' && p.status === 'archived' ? 'Reserved' : p.status}</span></td>
       <td>${p.tier || 'full'}</td>
       <td>${p.template || 'clean-white'}</td>
       <td style="font-size: 0.8rem; color: var(--text-muted)">${p.updated_at ? p.updated_at.slice(0, 10) : ''}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="window.editProfile('${p.id}')">Edit</button>
-        <a class="btn btn-sm btn-secondary" href="/u/${p.id}" target="_blank" rel="noopener">View</a>
+        ${p.tier === 'direct' ? '' : `<a class="btn btn-sm btn-secondary" href="/u/${p.id}" target="_blank" rel="noopener">View</a>`}
+        <button class="btn btn-sm btn-danger" onclick="window.deleteProfile('${p.id}')">Delete</button>
       </td>
     </tr>
   `).join('');
@@ -114,8 +269,10 @@ function setupEditor() {
   });
 
   document.getElementById('form-tier').addEventListener('change', (e) => {
-    const isRedirect = e.target.value === 'redirect';
-    document.getElementById('redirect-url-group').style.display = isRedirect ? 'block' : 'none';
+    applyTierVisibility(e.target.value);
+    updateDataFromForm();
+    queueQrPreview();
+    syncPreview();
   });
 
   document.getElementById('form-accent-picker').addEventListener('input', (e) => {
@@ -138,6 +295,7 @@ function setupEditor() {
   const idBadge = document.getElementById('id-status-badge');
 
   idInput.addEventListener('input', () => {
+    queueQrPreview();
     clearTimeout(idCheckTimeout);
     const val = idInput.value.trim().toLowerCase();
     const editId = document.getElementById('edit-id').value.trim().toLowerCase();
@@ -160,7 +318,7 @@ function setupEditor() {
             idBadge.textContent = 'Stock card ready';
             idBadge.className = 'stock';
           } else {
-            idBadge.textContent = 'Already active';
+            idBadge.textContent = data.status === 'archived' || data.status === 'reserved' ? 'Reserved ID' : 'Already active';
             idBadge.className = 'taken';
           }
         } else {
@@ -176,7 +334,6 @@ function setupEditor() {
   // Image Upload Handlers with Canvas Optimizer
   setupImageUploader('photo-file-input', 'form-photo', 'photo-preview-thumb', 360, 360);
   setupImageUploader('logo-file-input', 'form-logo', 'logo-preview-thumb', 480, 160);
-  setupImageUploader('qr-file-input', 'form-qr', 'qr-preview-thumb', 1000, 1000);
 
   document.getElementById('btn-remove-photo').addEventListener('click', () => {
     document.getElementById('form-photo').value = '';
@@ -187,13 +344,8 @@ function setupEditor() {
 
   document.getElementById('btn-remove-logo').addEventListener('click', () => {
     document.getElementById('form-logo').value = '';
-    document.getElementById('logo-preview-thumb').src = '/assets/company-logo.svg';
-    updateDataFromForm();
-    syncPreview();
-  });
-  document.getElementById('btn-remove-qr').addEventListener('click', () => {
-    document.getElementById('form-qr').value = '';
-    document.getElementById('qr-preview-thumb').src = '/assets/qr-code.svg';
+    document.getElementById('logo-preview-thumb').removeAttribute('src');
+    document.getElementById('logo-preview-thumb').hidden = true;
     updateDataFromForm();
     syncPreview();
   });
@@ -205,11 +357,24 @@ function setupEditor() {
 
   document.getElementById('form-logo').addEventListener('input', (e) => {
     const val = e.target.value.trim();
-    document.getElementById('logo-preview-thumb').src = val || '/assets/company-logo.svg';
+    const image = document.getElementById('logo-preview-thumb');
+    image.hidden = !val;
+    if (val) image.src = val;
+    else image.removeAttribute('src');
   });
-  document.getElementById('form-qr').addEventListener('input', (e) => {
-    document.getElementById('qr-preview-thumb').src = e.target.value.trim() || '/assets/qr-code.svg';
-  });
+  for (const format of ['standard', 'transparent']) {
+    document.getElementById(`btn-download-qr-${format}`).addEventListener('click', () => {
+    const dataUrl = qrDownloadData[format];
+    if (!dataUrl) return;
+    const id = normalizeQrId(document.getElementById('edit-id').value || document.getElementById('form-id').value);
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `${id || 'linkr-profile'}-qr-${format}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    });
+  }
 
   document.getElementById('btn-save-profile').addEventListener('click', saveProfile);
   document.getElementById('btn-refresh-preview').addEventListener('click', syncPreview);
@@ -255,7 +420,9 @@ function setupImageUploader(fileInputId, textInputId, previewImgId, maxWidth, ma
         const dataUrl = canvas.toDataURL(format, 0.85);
 
         document.getElementById(textInputId).value = dataUrl;
-        document.getElementById(previewImgId).src = dataUrl;
+        const previewImage = document.getElementById(previewImgId);
+        previewImage.src = dataUrl;
+        previewImage.hidden = false;
         updateDataFromForm();
         syncPreview();
       };
@@ -321,10 +488,11 @@ function populateForm(data) {
   const logo = isPlaceholderCompanyLogo(data.company_logo) ? '' : (data.company_logo || '');
   data.company_logo = logo;
   document.getElementById('form-logo').value = logo;
-  document.getElementById('logo-preview-thumb').src = logo || '/assets/company-logo.svg';
-  const qr = data.qr_code || '';
-  document.getElementById('form-qr').value = qr;
-  document.getElementById('qr-preview-thumb').src = qr || '/assets/qr-code.svg';
+  const logoImage = document.getElementById('logo-preview-thumb');
+  logoImage.hidden = !logo;
+  if (logo) logoImage.src = logo;
+  else logoImage.removeAttribute('src');
+  data.qr_code = null;
 
   data.template = normalizeTemplate(data.template);
   document.getElementById('form-template').value = data.template;
@@ -333,6 +501,7 @@ function populateForm(data) {
   if (previewIframe.getAttribute('src') !== previewUrl) previewIframe.src = previewUrl;
   document.getElementById('form-mode').value = data.profile_mode || 'standard';
   document.getElementById('form-redirect-url').value = data.redirect_url || '';
+  applyTierVisibility(document.getElementById('form-tier').value);
 
   const accent = data.theme?.accent || '#6f91a5';
   document.getElementById('form-accent').value = accent;
@@ -349,11 +518,30 @@ function populateForm(data) {
     addLinkRow({ type: 'phone', value: '', label: '' });
   }
 
-  syncPreview();
+  applyTierVisibility(document.getElementById('form-tier').value);
+  updateDataFromForm();
+  queueQrPreview();
 }
 
 function isPlaceholderCompanyLogo(value) {
   return typeof value === 'string' && /(?:^|\/)assets\/company-logo\.svg(?:[?#].*)?$/.test(value);
+}
+
+function applyTierVisibility(tier) {
+  const full = tier === 'full';
+  document.querySelectorAll('[data-full-tier]').forEach(group => { group.hidden = !full; });
+  document.querySelectorAll('[data-qr-tier]').forEach(group => { group.hidden = tier === 'direct'; });
+  document.getElementById('btn-add-link').hidden = !full;
+  document.getElementById('links-title').textContent = full
+    ? 'Links & Contacts'
+    : tier === 'redirect' ? 'Client Social Link and Redirect Destination' : 'Client Social Link (Record Only)';
+  const rows = [...document.querySelectorAll('.link-builder-row')];
+  if (!full && rows.length > 1) rows.slice(1).forEach(row => row.remove());
+  document.querySelectorAll('.remove-link-btn').forEach(button => { button.hidden = !full; });
+  if (!full) {
+    const type = document.querySelector('.link-builder-row .link-type');
+    if (type && ['phone', 'email'].includes(type.value)) type.value = 'website';
+  }
 }
 
 function resetNewProfileForm() {
@@ -362,8 +550,7 @@ function resetNewProfileForm() {
   document.getElementById('form-id').value = '';
   document.getElementById('id-status-badge').textContent = '';
   document.getElementById('form-tier').value = 'full';
-  document.getElementById('redirect-url-group').style.display = 'none';
-  for (const inputId of ['photo-file-input', 'logo-file-input', 'qr-file-input']) {
+  for (const inputId of ['photo-file-input', 'logo-file-input']) {
     const input = document.getElementById(inputId);
     if (input) input.value = '';
   }
@@ -387,7 +574,8 @@ function resetNewProfileForm() {
 
 function updateDataFromForm() {
   const links = [];
-  document.querySelectorAll('.link-builder-row').forEach(row => {
+  document.querySelectorAll('.link-builder-row').forEach((row, index) => {
+    if (document.getElementById('form-tier').value !== 'full' && index > 0) return;
     const type = row.querySelector('.link-type').value;
     const value = row.querySelector('.link-value').value.trim();
     const label = row.querySelector('.link-label').value.trim();
@@ -396,20 +584,24 @@ function updateDataFromForm() {
     }
   });
 
+  const tier = document.getElementById('form-tier').value;
+  const redirectLink = links[0]?.value || '';
   activeProfileData = {
     schema: 1,
-    template: document.getElementById('form-template').value,
-    profile_mode: document.getElementById('form-mode').value,
-    redirect_url: document.getElementById('form-redirect-url').value.trim() || null,
+    template: tier === 'full' ? document.getElementById('form-template').value : 'clean-white',
+    profile_mode: tier === 'full' ? document.getElementById('form-mode').value : 'standard',
+    redirect_url: tier === 'redirect' && redirectLink
+      ? (/^https?:\/\//i.test(redirectLink) ? redirectLink : `https://${redirectLink}`)
+      : null,
     name: document.getElementById('form-name').value.trim(),
-    company: document.getElementById('form-company').value.trim(),
-    title: document.getElementById('form-title').value.trim(),
-    title_link: document.getElementById('form-title-link').value.trim() || null,
-    bio: document.getElementById('form-bio').value.trim(),
-    location: document.getElementById('form-location').value.trim(),
-    photo: document.getElementById('form-photo').value.trim() || null,
-    company_logo: document.getElementById('form-logo').value.trim() || null,
-    qr_code: document.getElementById('form-qr').value.trim() || null,
+    company: tier === 'full' ? document.getElementById('form-company').value.trim() : '',
+    title: tier === 'full' ? document.getElementById('form-title').value.trim() : '',
+    title_link: tier === 'full' ? (document.getElementById('form-title-link').value.trim() || null) : null,
+    bio: tier === 'full' ? document.getElementById('form-bio').value.trim() : '',
+    location: tier === 'full' ? document.getElementById('form-location').value.trim() : null,
+    photo: tier === 'full' ? (document.getElementById('form-photo').value.trim() || null) : null,
+    company_logo: tier === 'full' ? (document.getElementById('form-logo').value.trim() || null) : null,
+    qr_code: activeProfileData.qr_code || null,
     theme: {
       mode: document.getElementById('form-template').value.includes('dark') || document.getElementById('form-template').value.includes('gold') ? 'dark' : 'light',
       accent: document.getElementById('form-accent').value.trim() || null
@@ -450,29 +642,51 @@ window.editProfile = async function(id) {
   }
 };
 
+window.deleteProfile = async function(id) {
+  if (!confirm(`Delete profile ${id}? Its ID will remain reserved, while its saved profile data and images are removed.`)) return;
+  try {
+    const res = await fetch(`/admin/api/admin/profiles?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    await loadProfiles();
+  } catch (error) {
+    alert(`Could not delete profile: ${error.message}`);
+  }
+};
+
 async function saveProfile() {
   if (isSavingProfile) return;
   isSavingProfile = true;
   const saveButton = document.getElementById('btn-save-profile');
   saveButton.disabled = true;
-  updateDataFromForm();
-
-  const editId = document.getElementById('edit-id').value.trim();
-  const inputId = document.getElementById('form-id').value.trim();
-  const id = editId || inputId;
-  const isNew = !editId;
-  const tier = document.getElementById('form-tier').value;
-
-  const payload = {
-    id: id || undefined,
-    is_new: isNew,
-    tier,
-    template: activeProfileData.template,
-    profile: activeProfileData,
-    reason: isNew ? 'Created via Admin UI' : 'Updated via Admin UI'
-  };
-
   try {
+    const editId = document.getElementById('edit-id').value.trim();
+    const isNew = !editId;
+    const id = normalizeQrId(editId || document.getElementById('form-id').value || generateCardId());
+    document.getElementById('form-id').value = id;
+    updateDataFromForm();
+    const tier = document.getElementById('form-tier').value;
+    let qrCode = null;
+    if (tier !== 'direct') {
+      const profileUrl = `${QR_PROFILE_BASE_URL}${id}`;
+      const [standard, transparent] = await Promise.all([
+        generateStyledQr(profileUrl, 'standard'),
+        generateStyledQr(profileUrl, 'transparent')
+      ]);
+      qrCode = standard;
+      displayGeneratedQrs(standard, transparent, id);
+    }
+    activeProfileData.qr_code = qrCode;
+    const payload = {
+      id,
+      is_new: isNew,
+      tier,
+      status: tier === 'direct' ? 'archived' : 'active',
+      template: activeProfileData.template,
+      profile: activeProfileData,
+      reason: isNew ? 'Created via Admin UI' : 'Updated via Admin UI'
+    };
+
     const res = await fetch('/admin/api/admin/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -485,7 +699,9 @@ async function saveProfile() {
       return;
     }
 
-    alert(`Profile ${isNew ? 'created' : 'updated'} successfully!\nCard ID: ${data.id}\nLive URL: ${data.url}`);
+    alert(tier === 'direct'
+      ? `Direct social record saved.\nReserved ID: ${data.id}\nNo public profile or QR is generated for this tier.`
+      : `${isNew ? 'Profile created' : 'Profile updated'} successfully!\nCard ID: ${data.id}\nLive URL: ${data.url}`);
     if (isNew) {
       resetNewProfileForm();
     } else {

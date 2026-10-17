@@ -479,6 +479,16 @@ body {
   object-fit: contain;
 }
 
+.qr-preview-status { color: var(--text-muted); font-size: 0.82rem; }
+.qr-format-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0; }
+.qr-format-card { display: grid; justify-items: start; gap: 8px; min-width: 0; }
+.qr-format-card strong { font-size: 0.82rem; }
+.qr-format-preview { width: min(100%, 190px); aspect-ratio: 1; display: grid; place-items: center; padding: 10px; border-radius: 8px; }
+.qr-preview-light { background: #fff; }
+.qr-preview-dark { background-color: #222; background-image: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.qr-auto-preview { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+[hidden] { display: none !important; }
+
 .upload-controls {
   display: flex;
   gap: 8px;

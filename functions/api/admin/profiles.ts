@@ -220,11 +220,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 version = ?,
                 template = ?,
                 tier = ?,
-                status = 'active',
+                status = ?,
                 updated_at = datetime('now'),
-                activated_at = datetime('now')
+                activated_at = CASE WHEN ? = 'active' THEN datetime('now') ELSE activated_at END
             WHERE id = ?
-          `).bind(dataJson, nextVersion, template, tier, id).run();
+          `).bind(dataJson, nextVersion, template, tier, status, status, id).run();
 
           return new Response(JSON.stringify({
             success: true,
@@ -302,6 +302,65 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || 'Error saving profile' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
+    });
+  }
+};
+
+// DELETE: Remove profile content while retaining its ID as an archived reservation.
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  const { request, env } = context;
+  const idParam = new URL(request.url).searchParams.get('id');
+  const id = idParam ? normalizeId(idParam) : '';
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'Profile ID is required.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
+    });
+  }
+
+  try {
+    const profile = await env.DB.prepare('SELECT version FROM profiles WHERE id = ? LIMIT 1')
+      .bind(id).first<{ version: number }>();
+    if (!profile) {
+      return new Response(JSON.stringify({ error: 'Profile not found.' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
+      });
+    }
+
+    if (env.R2_STORAGE) {
+      for (const prefix of [`photos/${id}-`, `logos/${id}-`, `qr/${id}-`, `qr/${id}.`]) {
+        let cursor: string | undefined;
+        do {
+          const page = await env.R2_STORAGE.list({ prefix, cursor });
+          if (page.objects.length) await env.R2_STORAGE.delete(page.objects.map(object => object.key));
+          cursor = page.truncated ? page.cursor : undefined;
+        } while (cursor);
+      }
+    }
+
+    const tombstone = JSON.stringify({ schema: 1, template: 'clean-white', name: '', links: [] });
+    const nextVersion = (profile.version || 1) + 1;
+    await env.DB.prepare('DELETE FROM edit_requests WHERE profile_id = ?').bind(id).run();
+    await env.DB.prepare('DELETE FROM profile_versions WHERE profile_id = ?').bind(id).run();
+    await env.DB.prepare(`
+      UPDATE profiles
+      SET data = ?, status = 'archived', version = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(tombstone, nextVersion, id).run();
+    await env.DB.prepare(`
+      INSERT INTO profile_versions (profile_id, version, data, changed_by, reason)
+      VALUES (?, ?, ?, 'admin', 'Profile deleted; ID retained as reserved')
+    `).bind(id, nextVersion, tombstone).run();
+
+    return new Response(JSON.stringify({ success: true, id, status: 'archived' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || 'Could not delete profile.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
     });

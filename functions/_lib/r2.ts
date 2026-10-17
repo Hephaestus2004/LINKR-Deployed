@@ -35,7 +35,9 @@ export async function storeProfileImages(env: Env, id: string, source: ProfileDa
     if (binary.length > Math.min(limit, spec.maxBytes)) throw new Error(`${field} exceeds its ${Math.floor(limit / 1024)} KB limit.`);
 
     const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
-    const key = `${prefix}/${id}-${crypto.randomUUID()}.${spec.extension}`;
+    const key = field === 'qr_code'
+      ? `${prefix}/${id}.${spec.extension}`
+      : `${prefix}/${id}-${crypto.randomUUID()}.${spec.extension}`;
     await env.R2_STORAGE.put(key, bytes, { httpMetadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000, immutable' } });
     profile[field] = `r2:${key}`;
   }

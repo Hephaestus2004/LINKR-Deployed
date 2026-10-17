@@ -124,7 +124,7 @@
                 </div>
 
                 <div class="form-row">
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Template</label>
                     <select id="form-template" class="select">
                       <option value="clean-white">Clean White (Light/Dark)</option>
@@ -133,7 +133,7 @@
                       <option value="bold-pop">Bold Pop (Neo-Brutalist & Vibrant)</option>
                     </select>
                   </div>
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Profile Mode</label>
                     <select id="form-mode" class="select">
                       <option value="standard">Standard (Personal + Links)</option>
@@ -142,10 +142,7 @@
                   </div>
                 </div>
 
-                <div id="redirect-url-group" class="form-group" style="display: none;">
-                  <label>Redirect Destination URL</label>
-                  <input type="url" id="form-redirect-url" class="input" placeholder="https://instagram.com/yourhandle">
-                </div>
+                <input type="hidden" id="form-redirect-url">
               </div>
 
               <!-- Identity Card -->
@@ -156,34 +153,34 @@
                     <label>Full Name *</label>
                     <input type="text" id="form-name" class="input" placeholder="Alex Example" maxlength="60" required>
                   </div>
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Company / Organization</label>
                     <input type="text" id="form-company" class="input" placeholder="Studio Co." maxlength="80">
                   </div>
                 </div>
 
                 <div class="form-row">
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Job Title</label>
                     <input type="text" id="form-title" class="input" placeholder="Photographer & Founder" maxlength="80">
                   </div>
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Title Link (Optional external website)</label>
                     <input type="url" id="form-title-link" class="input" placeholder="https://example.com">
                   </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" data-full-tier>
                   <label>Bio (Short description)</label>
                   <textarea id="form-bio" class="textarea" rows="2" placeholder="Weddings and events in Metro Manila." maxlength="300"></textarea>
                 </div>
 
                 <div class="form-row">
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Location (City / Area)</label>
                     <input type="text" id="form-location" class="input" placeholder="Makati, Metro Manila" maxlength="120">
                   </div>
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Accent Color</label>
                     <div class="color-picker-row">
                       <input type="color" id="form-accent-picker" value="#6f91a5">
@@ -195,7 +192,7 @@
                 <!-- Photo & Logo Upload Rows -->
                 <div class="form-row">
                   <!-- Profile Photo Uploader -->
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Profile Photo</label>
                     <div class="image-upload-box">
                       <img id="photo-preview-thumb" src="/assets/profile-photo.svg" alt="Photo Preview" class="image-thumb">
@@ -211,10 +208,10 @@
                   </div>
 
                   <!-- Company Logo Uploader -->
-                  <div class="form-group">
+                  <div class="form-group" data-full-tier>
                     <label>Company Logo (Optional)</label>
                     <div class="image-upload-box">
-                      <img id="logo-preview-thumb" src="/assets/company-logo.svg" alt="Logo Preview" class="image-thumb logo-thumb">
+                      <img id="logo-preview-thumb" alt="Logo Preview" class="image-thumb logo-thumb" hidden>
                       <div class="upload-controls">
                         <label class="btn btn-sm btn-secondary file-btn">
                           Choose Logo
@@ -226,25 +223,33 @@
                     <input type="text" id="form-logo" class="input" placeholder="Or paste logo URL" style="margin-top: 6px; font-size: 0.8rem;">
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>QR Code Image (Optional)</label>
-                    <div class="image-upload-box">
-                      <img id="qr-preview-thumb" src="/assets/qr-code.svg" alt="QR Code Preview" class="image-thumb">
-                      <div class="upload-controls">
-                        <label class="btn btn-sm btn-secondary file-btn">Choose QR<input type="file" id="qr-file-input" accept="image/png,image/webp,image/jpeg" style="display:none;"></label>
-                        <button type="button" id="btn-remove-qr" class="btn btn-sm btn-danger">Clear</button>
+                <div class="form-group qr-generator" data-qr-tier>
+                  <label>Profile QR Code</label>
+                  <p id="qr-preview-status" class="qr-preview-status">Both QR styles will be generated for this profile ID.</p>
+                  <div class="qr-format-grid">
+                    <div class="qr-format-card">
+                      <strong>Black on white</strong>
+                      <div class="qr-format-preview qr-preview-light">
+                        <img id="qr-preview-standard" alt="Black QR code on a white background" class="qr-auto-preview" hidden>
                       </div>
+                      <button type="button" id="btn-download-qr-standard" class="btn btn-sm btn-secondary" hidden>Download PNG</button>
                     </div>
-                    <input type="text" id="form-qr" class="input" placeholder="Or paste QR image URL" style="margin-top: 6px; font-size: 0.8rem;">
+                    <div class="qr-format-card">
+                      <strong>White, transparent background</strong>
+                      <div class="qr-format-preview qr-preview-dark">
+                        <img id="qr-preview-transparent" alt="White QR code with a transparent background" class="qr-auto-preview" hidden>
+                      </div>
+                      <button type="button" id="btn-download-qr-transparent" class="btn btn-sm btn-secondary" hidden>Download PNG</button>
+                    </div>
                   </div>
+                  <small>The white transparent PNG is intended for dark backgrounds.</small>
                 </div>
               </div>
 
               <!-- Links & Contacts -->
               <div class="form-card">
                 <div class="card-header-flex">
-                  <h3>Links & Contacts</h3>
+                  <h3 id="links-title">Links & Contacts</h3>
                   <button type="button" id="btn-add-link" class="btn btn-sm btn-secondary">+ Add Link</button>
                 </div>
                 <div id="links-container" class="links-builder"></div>
@@ -342,6 +347,7 @@
     </main>
   </div>
 
+  <script src="/shared/qrcode.min.js"></script>
   <script type="module" src="/admin/app.js"></script>
 </body>
 </html>
