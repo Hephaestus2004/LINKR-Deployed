@@ -646,8 +646,15 @@ window.deleteProfile = async function(id) {
   if (!confirm(`Delete profile ${id}? Its ID will remain reserved, while its saved profile data and images are removed.`)) return;
   try {
     const res = await fetch(`/admin/api/admin/profiles?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    const data = await res.json();
+    const responseText = await res.text();
+    let data = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      data = { error: responseText || `Server returned an empty response (HTTP ${res.status}).` };
+    }
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (!data.success) throw new Error(data.error || `Delete was not confirmed (HTTP ${res.status}).`);
     await loadProfiles();
   } catch (error) {
     alert(`Could not delete profile: ${error.message}`);
