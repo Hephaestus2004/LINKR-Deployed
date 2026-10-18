@@ -213,7 +213,8 @@ function setupTabs() {
 async function loadProfiles() {
   const tbody = document.getElementById('profiles-table-body');
   const statusFilter = document.getElementById('filter-status').value;
-  tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading profiles...</td></tr>';
+  document.getElementById('select-all-profiles').checked = false;
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading profiles...</td></tr>';
 
   try {
     const url = statusFilter ? `/admin/api/admin/profiles?status=${statusFilter}` : '/admin/api/admin/profiles';
@@ -223,19 +224,21 @@ async function loadProfiles() {
     currentProfiles = data.profiles || [];
     renderProfilesTable(currentProfiles);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" style="color: var(--danger)">Error loading profiles: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color: var(--danger)">Error loading profiles: ${err.message}</td></tr>`;
   }
 }
 
 function renderProfilesTable(profiles) {
   const tbody = document.getElementById('profiles-table-body');
   if (!profiles.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted)">No profiles found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--text-muted)">No profiles found</td></tr>';
+    updateBulkDeleteButton();
     return;
   }
 
   tbody.innerHTML = profiles.map(p => `
     <tr>
+      <td><input type="checkbox" class="profile-select" data-id="${p.id}" aria-label="Select profile ${p.id}"></td>
       <td><code>${p.id}</code></td>
       <td>#${p.seq}</td>
       <td><span class="badge badge-${p.status}">${p.tier === 'direct' && p.status === 'archived' ? 'Reserved' : p.status}</span></td>
@@ -249,6 +252,273 @@ function renderProfilesTable(profiles) {
       </td>
     </tr>
   `).join('');
+  updateBulkDeleteButton();
+}
+
+function updateBulkDeleteButton() {
+  const selected = [...document.querySelectorAll('.profile-select:checked')];
+  const all = [...document.querySelectorAll('.profile-select')];
+  const selectAll = document.getElementById('select-all-profiles');
+  const bulkButton = document.getElementById('btn-delete-selected');
+  const exportButton = document.getElementById('btn-export-selected-qr');
+  const mergedExportButton = document.getElementById('btn-export-merged-qr');
+  if (!selectAll || !bulkButton || !exportButton || !mergedExportButton) return;
+  selectAll.checked = all.length > 0 && selected.length === all.length;
+  selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
+  bulkButton.hidden = selected.length === 0;
+  bulkButton.textContent = `Delete selected (${selected.length})`;
+  bulkButton.disabled = false;
+  exportButton.hidden = selected.length === 0;
+  exportButton.textContent = `Export transparent QR + ID PNGs (${selected.length})`;
+  exportButton.disabled = false;
+  mergedExportButton.hidden = selected.length === 0;
+  mergedExportButton.textContent = `Export 9 × 6 sheets ZIP (${selected.length})`;
+  mergedExportButton.disabled = false;
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZip(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const content = file.data;
+    const crc = crc32(content);
+    const local = new Uint8Array(30 + name.length + content.length);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, content.length, true);
+    localView.setUint32(22, content.length, true);
+    localView.setUint16(26, name.length, true);
+    local.set(name, 30);
+    local.set(content, 30 + name.length);
+    localParts.push(local);
+
+    const central = new Uint8Array(46 + name.length);
+    const centralView = new DataView(central.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, content.length, true);
+    centralView.setUint32(24, content.length, true);
+    centralView.setUint16(28, name.length, true);
+    centralView.setUint32(42, offset, true);
+    central.set(name, 46);
+    centralParts.push(central);
+    offset += local.length;
+  }
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+}
+
+async function generateUserIdPng(id) {
+  if (document.fonts?.load) {
+    await document.fonts.load('italic 6px "JetBrains Mono"');
+  }
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = 'italic 6px "JetBrains Mono", monospace';
+  const metrics = ctx.measureText(id);
+  canvas.width = Math.ceil(metrics.width) + 2;
+  canvas.height = 9;
+  ctx.font = 'italic 6px "JetBrains Mono", monospace';
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'top';
+  ctx.fillText(id, 1, 1);
+  const image = await fetch(canvas.toDataURL('image/png')).then((response) => response.arrayBuffer());
+  return new Uint8Array(image);
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not create the merged PNG.')), 'image/png');
+  });
+}
+
+async function loadImage(src) {
+  const image = new Image();
+  image.src = src;
+  await image.decode();
+  return image;
+}
+
+async function exportMergedQrSheet() {
+  const selectedIds = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
+  if (!selectedIds.length) return;
+  const profiles = selectedIds.map((id) => currentProfiles.find((profile) => profile.id === id)).filter(Boolean);
+  const exportable = profiles.filter((profile) => profile.tier !== 'direct');
+  const skipped = profiles.length - exportable.length;
+  if (!exportable.length) {
+    alert('Selected direct-social records do not have public profile QR codes.');
+    return;
+  }
+
+  const button = document.getElementById('btn-export-merged-qr');
+  button.disabled = true;
+  const columns = 9;
+  const rowsPerPage = 6;
+  const perPage = columns * rowsPerPage;
+  const qrSize = 360;
+  const cellWidth = 420;
+  const cellHeight = 420;
+  const gap = 24;
+  const margin = 48;
+  const files = [];
+  const pageCount = Math.ceil(exportable.length / perPage);
+  try {
+    await document.fonts.load('italic 700 26px "JetBrains Mono"');
+    for (let page = 0; page < pageCount; page++) {
+      const pageProfiles = exportable.slice(page * perPage, (page + 1) * perPage);
+      const canvas = document.createElement('canvas');
+      canvas.width = margin * 2 + columns * cellWidth + (columns - 1) * gap;
+      canvas.height = margin * 2 + rowsPerPage * cellHeight + (rowsPerPage - 1) * gap;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('This browser could not create the merged PNG canvas.');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'italic 700 26px "JetBrains Mono", monospace';
+
+      for (let index = 0; index < pageProfiles.length; index++) {
+        const id = pageProfiles[index].id;
+        button.textContent = `Building sheet ${page + 1}/${pageCount} (${index + 1}/${pageProfiles.length})...`;
+        const qrData = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent');
+        const qrImage = await loadImage(qrData);
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const cellX = margin + column * (cellWidth + gap);
+        const cellY = margin + row * (cellHeight + gap);
+        ctx.drawImage(qrImage, cellX + (cellWidth - qrSize) / 2, cellY, qrSize, qrSize);
+        ctx.fillText(id, cellX + cellWidth / 2, cellY + qrSize + 20, cellWidth - 12);
+      }
+
+      const blob = await canvasToBlob(canvas);
+      const data = await blob.arrayBuffer();
+      files.push({ name: `linkr-qr-sheet-${String(page + 1).padStart(2, '0')}.png`, data: new Uint8Array(data) });
+    }
+
+    const blob = createZip(files);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `linkr-qr-sheets-${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (skipped) alert(`Exported ${exportable.length} QR codes across ${files.length} sheet${files.length === 1 ? '' : 's'}. Skipped ${skipped} direct-social record${skipped === 1 ? '' : 's'} because they do not use profile QR codes.`);
+  } catch (error) {
+    alert(`Could not export the merged QR PNG: ${error.message}`);
+  } finally {
+    updateBulkDeleteButton();
+  }
+}
+
+async function exportSelectedTransparentQrs() {
+  const selectedIds = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
+  if (!selectedIds.length) return;
+  const selectedProfiles = selectedIds.map((id) => currentProfiles.find((profile) => profile.id === id)).filter(Boolean);
+  const exportable = selectedProfiles.filter((profile) => profile.tier !== 'direct');
+  const skipped = selectedProfiles.length - exportable.length;
+  if (!exportable.length) {
+    alert('Selected direct-social records do not have public profile QR codes.');
+    return;
+  }
+  const button = document.getElementById('btn-export-selected-qr');
+  button.disabled = true;
+  const files = [];
+  try {
+    for (let index = 0; index < exportable.length; index++) {
+      const id = exportable[index].id;
+      button.textContent = `Generating ${index + 1}/${exportable.length}...`;
+      const dataUrl = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent');
+      const image = await fetch(dataUrl).then((response) => response.arrayBuffer());
+      files.push({ name: `${id}-qr-transparent.png`, data: new Uint8Array(image) });
+      files.push({ name: `${id}-userid.png`, data: await generateUserIdPng(id) });
+    }
+    const zip = createZip(files);
+    const url = URL.createObjectURL(zip);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `linkr-transparent-qr-${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (skipped) alert(`Exported ${files.length} transparent QR codes. Skipped ${skipped} direct-social record${skipped === 1 ? '' : 's'} because they do not use profile QR codes.`);
+  } catch (error) {
+    alert(`Could not export QR codes: ${error.message}`);
+  } finally {
+    updateBulkDeleteButton();
+  }
+}
+
+async function deleteProfileRequest(id) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  let res;
+  try {
+    res = await fetch(`/admin/api/admin/profiles?id=${encodeURIComponent(id)}`, { method: 'DELETE', signal: controller.signal });
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('Delete request timed out. Refresh the directory to check whether the profile was removed.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+  const responseText = await res.text();
+  let data = {};
+  try {
+    data = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    data = { error: responseText || `Server returned an empty response (HTTP ${res.status}).` };
+  }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!data.success) throw new Error(data.error || `Delete was not confirmed (HTTP ${res.status}).`);
+  return data;
+}
+
+async function deleteSelectedProfiles() {
+  const ids = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} selected profile${ids.length === 1 ? '' : 's'}? Their IDs will remain reserved, while saved profile data and images are removed.`)) return;
+
+  const button = document.getElementById('btn-delete-selected');
+  button.disabled = true;
+  button.textContent = `Deleting ${ids.length}...`;
+  const results = await Promise.allSettled(ids.map((id) => deleteProfileRequest(id)));
+  const failures = results.flatMap((result, index) => result.status === 'rejected' ? [`${ids[index]}: ${result.reason.message}`] : []);
+  // Hide successful deletions immediately, then reload from the server to reconcile.
+  const removed = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'));
+  currentProfiles = currentProfiles.filter((profile) => !removed.has(profile.id));
+  renderProfilesTable(currentProfiles);
+  try {
+    await loadProfiles();
+  } finally {
+    updateBulkDeleteButton();
+  }
+  if (failures.length) {
+    alert(`Deleted ${ids.length - failures.length} of ${ids.length} profiles.\n\nCould not delete:\n${failures.join('\n')}`);
+  }
 }
 
 // 3. Editor Setup & Real-time Live Preview
@@ -318,7 +588,7 @@ function setupEditor() {
             idBadge.textContent = 'Stock card ready';
             idBadge.className = 'stock';
           } else {
-            idBadge.textContent = data.status === 'archived' || data.status === 'reserved' ? 'Reserved ID' : 'Already active';
+            idBadge.textContent = data.status === 'archived' || data.status === 'deleted' || data.status === 'reserved' ? 'Reserved ID' : 'Already active';
             idBadge.className = 'taken';
           }
         } else {
@@ -385,6 +655,16 @@ function setupEditor() {
 
   document.getElementById('btn-refresh-profiles').addEventListener('click', loadProfiles);
   document.getElementById('filter-status').addEventListener('change', loadProfiles);
+  document.getElementById('select-all-profiles').addEventListener('change', (event) => {
+    document.querySelectorAll('.profile-select').forEach((checkbox) => { checkbox.checked = event.target.checked; });
+    updateBulkDeleteButton();
+  });
+  document.getElementById('profiles-table-body').addEventListener('change', (event) => {
+    if (event.target.matches('.profile-select')) updateBulkDeleteButton();
+  });
+  document.getElementById('btn-delete-selected').addEventListener('click', deleteSelectedProfiles);
+  document.getElementById('btn-export-selected-qr').addEventListener('click', exportSelectedTransparentQrs);
+  document.getElementById('btn-export-merged-qr').addEventListener('click', exportMergedQrSheet);
 }
 
 // Client-side image compressor & data-url generator
@@ -645,16 +925,7 @@ window.editProfile = async function(id) {
 window.deleteProfile = async function(id) {
   if (!confirm(`Delete profile ${id}? Its ID will remain reserved, while its saved profile data and images are removed.`)) return;
   try {
-    const res = await fetch(`/admin/api/admin/profiles?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    const responseText = await res.text();
-    let data = {};
-    try {
-      data = responseText ? JSON.parse(responseText) : {};
-    } catch {
-      data = { error: responseText || `Server returned an empty response (HTTP ${res.status}).` };
-    }
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    if (!data.success) throw new Error(data.error || `Delete was not confirmed (HTTP ${res.status}).`);
+    await deleteProfileRequest(id);
     await loadProfiles();
   } catch (error) {
     alert(`Could not delete profile: ${error.message}`);
@@ -731,6 +1002,10 @@ function setupBatchGenerator() {
     const label = document.getElementById('batch-label').value.trim();
     const size = Number(document.getElementById('batch-size').value);
     const tier = document.getElementById('batch-tier').value;
+    if (!Number.isInteger(size) || size < 1 || size > 500) {
+      alert('Enter a quantity from 1 to 500.');
+      return;
+    }
 
     const btn = document.getElementById('btn-generate-batch');
     btn.disabled = true;

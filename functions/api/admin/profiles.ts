@@ -96,9 +96,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // List latest 100 profiles
     const statusFilter = url.searchParams.get('status');
+    const visibleProfileFilter = `COALESCE(json_extract(data, '$.deleted'), 0) = 0
+      AND NOT (
+        status = 'archived'
+        AND COALESCE(json_extract(data, '$.name'), '') = ''
+        AND COALESCE(json_array_length(json_extract(data, '$.links')), 0) = 0
+      )`;
     const query = statusFilter
-      ? 'SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles WHERE status = ? ORDER BY seq DESC LIMIT 100'
-      : 'SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles ORDER BY seq DESC LIMIT 100';
+      ? `SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles
+         WHERE status = ? AND status != 'deleted' AND ${visibleProfileFilter}
+         ORDER BY seq DESC LIMIT 100`
+      : `SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles
+         WHERE status != 'deleted' AND ${visibleProfileFilter}
+         ORDER BY seq DESC LIMIT 100`;
 
     const stmt = statusFilter
       ? env.DB.prepare(query).bind(statusFilter)
@@ -341,7 +351,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       }
     }
 
-    const tombstone = JSON.stringify({ schema: 1, template: 'clean-white', name: '', links: [] });
+    const tombstone = JSON.stringify({ schema: 1, deleted: true, template: 'clean-white', name: '', links: [] });
     const nextVersion = (profile.version || 1) + 1;
     await env.DB.prepare('DELETE FROM edit_requests WHERE profile_id = ?').bind(id).run();
     await env.DB.prepare('DELETE FROM profile_versions WHERE profile_id = ?').bind(id).run();
@@ -355,7 +365,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       VALUES (?, ?, ?, 'admin', 'Profile deleted; ID retained as reserved')
     `).bind(id, nextVersion, tombstone).run();
 
-    return new Response(JSON.stringify({ success: true, id, status: 'archived' }), {
+    return new Response(JSON.stringify({ success: true, id, status: 'archived', reserved: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...getNoCacheHeaders() }
     });
