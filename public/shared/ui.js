@@ -27,18 +27,46 @@ export function generateInitialsAvatar(name = '', accent = '#4f8daa') {
 export function setupProfileFlip() {
   // Renderers call this after populating the profile; the data object is
   // available both on server-injected pages and the admin's live preview.
-  applyProfileDesign(window.__LINKR_PROFILE__);
+  const hasSectionLayout = applyProfileDesign(window.__LINKR_PROFILE__);
 
   const inner = document.getElementById('profile-inner');
   const buttons = document.querySelectorAll('.qr-toggle');
   const front = document.querySelector('.profile-front');
   const back = document.querySelector('.profile-back');
 
-  if (!inner || !buttons.length || inner.dataset.flipInitialized === 'true') return;
-  inner.dataset.flipInitialized = 'true';
+  if (!inner || !buttons.length) return;
 
+  if (inner.__linkrFlipHandlers) {
+    for (const [button, handler] of inner.__linkrFlipHandlers) button.removeEventListener('click', handler);
+    delete inner.__linkrFlipHandlers;
+  }
+
+  if (hasSectionLayout) {
+    inner.classList.remove('is-flipped');
+    delete inner.dataset.flipInitialized;
+    const qrSection = document.getElementById('profile-section-qr');
+    const frontToggle = document.querySelector('.profile-front .qr-toggle');
+    const backToggle = document.querySelector('#profile-section-qr .qr-toggle');
+    const setQrView = showingQr => {
+      if (!qrSection) return;
+      qrSection.dataset.qrOpen = String(showingQr);
+      document.querySelectorAll('#profile-sections .profile-custom-section').forEach(section => {
+        section.hidden = showingQr
+          ? section.dataset.section !== 'qr' || section.dataset.enabled !== 'true'
+          : section.dataset.enabled !== 'true';
+      });
+    };
+    if (frontToggle) frontToggle.onclick = () => setQrView(true);
+    if (backToggle) backToggle.onclick = () => setQrView(false);
+    return;
+  }
+
+  buttons.forEach(button => { button.onclick = null; });
+  if (inner.dataset.flipInitialized === 'true') return;
+
+  const handlers = [];
   buttons.forEach(button => {
-    button.addEventListener('click', () => {
+    const handler = () => {
       const flipped = inner.classList.toggle('is-flipped');
       buttons.forEach(toggle => {
         toggle.setAttribute('aria-pressed', String(flipped));
@@ -46,8 +74,12 @@ export function setupProfileFlip() {
       });
       if (front) front.setAttribute('aria-hidden', String(flipped));
       if (back) back.setAttribute('aria-hidden', String(!flipped));
-    });
+    };
+    button.addEventListener('click', handler);
+    handlers.push([button, handler]);
   });
+  inner.__linkrFlipHandlers = handlers;
+  inner.dataset.flipInitialized = 'true';
 }
 
 /**

@@ -900,6 +900,30 @@ function setupEditor() {
     syncPreview();
   });
 
+  const sectionLayoutToggle = document.getElementById('form-section-layout-enabled');
+  const sectionList = document.getElementById('form-sections-list');
+  sectionLayoutToggle.addEventListener('change', () => {
+    sectionList.hidden = !sectionLayoutToggle.checked;
+    updateDataFromForm();
+    syncPreview();
+  });
+  sectionList.addEventListener('click', event => {
+    const button = event.target.closest('.section-move-up, .section-move-down');
+    if (!button) return;
+    const row = button.closest('.section-order-row');
+    if (button.classList.contains('section-move-up') && row.previousElementSibling) {
+      sectionList.insertBefore(row, row.previousElementSibling);
+    } else if (button.classList.contains('section-move-down') && row.nextElementSibling) {
+      sectionList.insertBefore(row.nextElementSibling, row);
+    }
+    updateDataFromForm();
+    syncPreview();
+  });
+  sectionList.addEventListener('input', () => {
+    updateDataFromForm();
+    syncPreview();
+  });
+
   document.getElementById('form-tier').addEventListener('change', (e) => {
     applyTierVisibility(e.target.value);
     updateDataFromForm();
@@ -1173,6 +1197,20 @@ function populateForm(data) {
   document.getElementById('form-icon-pack').value = ['classic', 'bold'].includes(data.design?.iconPack)
     ? data.design.iconPack
     : 'classic';
+  const sectionList = document.getElementById('form-sections-list');
+  const allSectionIds = ['identity', 'links', 'share', 'qr'];
+  const savedSections = Array.isArray(data.design?.sections) ? data.design.sections : null;
+  const desiredOrder = savedSections
+    ? [...savedSections, ...allSectionIds.filter(id => !savedSections.includes(id))]
+    : allSectionIds;
+  const rowsById = new Map([...sectionList.querySelectorAll('.section-order-row')]
+    .map(row => [row.dataset.sectionId, row]));
+  desiredOrder.forEach(id => { if (rowsById.has(id)) sectionList.appendChild(rowsById.get(id)); });
+  sectionList.querySelectorAll('.section-order-row').forEach(row => {
+    row.querySelector('.section-enabled').checked = !savedSections || savedSections.includes(row.dataset.sectionId);
+  });
+  document.getElementById('form-section-layout-enabled').checked = Boolean(savedSections);
+  sectionList.hidden = !savedSections;
   document.getElementById('form-redirect-url').value = data.redirect_url || '';
   applyTierVisibility(document.getElementById('form-tier').value);
 
@@ -1261,6 +1299,15 @@ function updateDataFromForm() {
   const redirectLink = links[0]?.value || '';
   const priorDesign = activeProfileData?.design || {};
   const selectedPreset = document.getElementById('form-theme-preset').value;
+  const hasSectionLayout = document.getElementById('form-section-layout-enabled').checked;
+  let selectedSections = [...document.querySelectorAll('#form-sections-list .section-order-row')]
+    .filter(row => row.querySelector('.section-enabled').checked)
+    .map(row => row.dataset.sectionId);
+  if (hasSectionLayout && !selectedSections.length) {
+    const identityRow = document.querySelector('#form-sections-list [data-section-id="identity"]');
+    identityRow.querySelector('.section-enabled').checked = true;
+    selectedSections = ['identity'];
+  }
   activeProfileData = {
     schema: 1,
     template: tier === 'full' ? document.getElementById('form-template').value : 'clean-white',
@@ -1285,6 +1332,7 @@ function updateDataFromForm() {
     },
     design: {
       ...priorDesign,
+      sections: hasSectionLayout ? selectedSections : undefined,
       themePreset: selectedPreset || undefined,
       iconPack: document.getElementById('form-icon-pack').value || 'classic'
     },

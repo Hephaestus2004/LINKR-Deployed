@@ -38,6 +38,148 @@ const THEME_PRESETS = Object.freeze({
 
 const ICON_PACK_IDS = new Set(['classic', 'bold']);
 const ICON_PACK_STYLE_ID = 'linkr-icon-pack-style';
+const SECTION_IDS = ['identity', 'links', 'share', 'qr'];
+
+function getSectionStyle() {
+  let style = document.getElementById('linkr-section-layout-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'linkr-section-layout-style';
+    style.textContent = `
+      #profile-sections { display: flex; flex-direction: column; gap: 18px; }
+      .profile-custom-section[hidden] { display: none !important; }
+      #profile-section-identity { display: flex; flex-direction: column; gap: 18px; }
+      #profile-section-identity .profile-flip { margin-bottom: 0; }
+      #profile-section-qr .profile-back { display: flex; transform: none; pointer-events: auto; backface-visibility: visible; }
+      #profile-section-qr .profile-back[hidden] { display: none !important; }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+function restoreTemplateLayout() {
+  const card = document.querySelector('main.card');
+  const sections = document.getElementById('profile-sections');
+  if (!card || !sections) return;
+
+  const inner = card.querySelector('#profile-inner');
+  const back = sections.querySelector('.profile-back');
+  if (back && inner) inner.appendChild(back);
+
+  const links = card.querySelector('#links');
+  const shareList = sections.querySelector('#profile-share-list');
+  const shareItem = shareList?.querySelector('li');
+  if (shareItem && links) links.insertBefore(shareItem, links.firstChild);
+
+  const identity = sections.querySelector('#profile-section-identity');
+  const flip = identity?.querySelector('.profile-flip');
+  if (flip) card.insertBefore(flip, sections);
+  for (const selector of ['#save', '#visit-us', '#vcf-fallback']) {
+    const element = identity?.querySelector(selector);
+    if (element) card.insertBefore(element, sections);
+  }
+  if (links) card.insertBefore(links, sections);
+
+  sections.remove();
+  delete card.dataset.profileSections;
+  delete document.documentElement.dataset.profileLayout;
+  if (inner) inner.classList.remove('is-flipped');
+  if (back) {
+    back.hidden = false;
+    back.setAttribute('aria-hidden', 'true');
+  }
+  const front = card.querySelector('.profile-front');
+  if (front) {
+    front.hidden = false;
+    front.setAttribute('aria-hidden', 'false');
+  }
+  const quickActions = card.querySelector('#quick-actions');
+  if (quickActions) quickActions.hidden = false;
+  card.querySelectorAll('.qr-toggle').forEach(button => { button.onclick = null; });
+  if (front) front.hidden = false;
+}
+
+function applySectionLayout(profile) {
+  const sectionsList = profile?.design?.sections;
+  const card = document.querySelector('main.card');
+  if (!Array.isArray(sectionsList) || !sectionsList.length || !card) {
+    restoreTemplateLayout();
+    return false;
+  }
+
+  const enabledIds = [...new Set(sectionsList.filter(id => SECTION_IDS.includes(id)))];
+  if (!enabledIds.length) return false;
+
+  let shell = document.getElementById('profile-sections');
+  if (!shell) {
+    const inner = card.querySelector('#profile-inner');
+    const flip = card.querySelector('.profile-flip');
+    const links = card.querySelector('#links');
+    const back = card.querySelector('.profile-back');
+    if (!inner || !flip || !links || !back) return false;
+
+    shell = document.createElement('div');
+    shell.id = 'profile-sections';
+    const identity = document.createElement('section');
+    identity.className = 'profile-custom-section';
+    identity.id = 'profile-section-identity';
+    const linkSection = document.createElement('section');
+    linkSection.className = 'profile-custom-section';
+    linkSection.id = 'profile-section-links';
+    const shareSection = document.createElement('section');
+    shareSection.className = 'profile-custom-section';
+    shareSection.id = 'profile-section-share';
+    const qrSection = document.createElement('section');
+    qrSection.className = 'profile-custom-section';
+    qrSection.id = 'profile-section-qr';
+    const shareList = document.createElement('ul');
+    shareList.className = 'links';
+    shareList.id = 'profile-share-list';
+    shareSection.appendChild(shareList);
+
+    identity.appendChild(flip);
+    for (const selector of ['#save', '#visit-us', '#vcf-fallback']) {
+      const action = card.querySelector(selector);
+      if (action) identity.appendChild(action);
+    }
+    linkSection.appendChild(links);
+    qrSection.appendChild(back);
+    shell.append(identity, linkSection, shareSection, qrSection);
+    card.prepend(shell);
+  }
+
+  const links = shell.querySelector('#links');
+  const shareList = shell.querySelector('#profile-share-list');
+  const shareItem = links?.querySelector('.share-profile')?.closest('li');
+  if (shareItem && shareList) shareList.replaceChildren(shareItem);
+
+  const sectionNodes = new Map(SECTION_IDS.map(id => [id, shell.querySelector(`#profile-section-${id}`)]));
+  for (const id of SECTION_IDS) {
+    const section = sectionNodes.get(id);
+    if (section) {
+      section.dataset.section = id;
+      section.dataset.enabled = String(enabledIds.includes(id));
+      section.hidden = !enabledIds.includes(id);
+    }
+  }
+  shell.append(...SECTION_IDS.map(id => sectionNodes.get(id)).filter(Boolean).sort((a, b) => {
+    const orderA = enabledIds.indexOf(a.dataset.section);
+    const orderB = enabledIds.indexOf(b.dataset.section);
+    return (orderA < 0 ? SECTION_IDS.length : orderA) - (orderB < 0 ? SECTION_IDS.length : orderB);
+  }));
+
+  const qrBack = shell.querySelector('.profile-back');
+  const qrToggle = card.querySelector('.profile-front .qr-toggle');
+  const backToggle = qrBack?.querySelector('.qr-toggle');
+  const quickActions = card.querySelector('#quick-actions');
+  if (qrToggle) qrToggle.hidden = !enabledIds.includes('qr');
+  if (backToggle) backToggle.hidden = !enabledIds.includes('identity');
+  if (quickActions) quickActions.hidden = !enabledIds.includes('links');
+  getSectionStyle();
+  card.dataset.profileSections = 'true';
+  document.documentElement.dataset.profileLayout = 'sections';
+  return true;
+}
 
 function applySafeTheme(theme = {}) {
   const root = document.documentElement;
@@ -64,6 +206,7 @@ export function applyProfileDesign(profile, templateDefaults = {}) {
   if (Object.keys(preset).length) {
     applySafeTheme({ ...templateDefaults, ...preset, ...(profile?.theme || {}) });
   }
+  const hasSectionLayout = applySectionLayout(profile);
 
   const root = document.documentElement;
   const backgroundImage = typeof profile?.background_image === 'string' ? profile.background_image : '';
@@ -110,4 +253,5 @@ export function applyProfileDesign(profile, templateDefaults = {}) {
   } else if (packStyle) {
     packStyle.remove();
   }
+  return hasSectionLayout;
 }

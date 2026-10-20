@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@1,400&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="/assets/contact-favicon.svg">
-  <link rel="stylesheet" href="/admin/style.css?v=20261021-qr-image-decode">
+  <link rel="stylesheet" href="/admin/style.css?v=20261021-profile-sections">
 </head>
 <body>
   <div class="admin-app">
@@ -251,6 +251,20 @@
                   </div>
                 </div>
 
+                <div class="form-group" data-full-tier>
+                  <label for="form-section-layout-enabled">
+                    <input type="checkbox" id="form-section-layout-enabled">
+                    Use a custom page section order
+                  </label>
+                  <small>Choose which safe sections appear, then move them with the arrows.</small>
+                  <div id="form-sections-list" class="section-order-list" hidden>
+                    <div class="section-order-row" data-section-id="identity"><label><input type="checkbox" class="section-enabled" checked> Name / logo</label><div><button type="button" class="btn btn-sm btn-secondary section-move-up" aria-label="Move name or logo up">↑</button> <button type="button" class="btn btn-sm btn-secondary section-move-down" aria-label="Move name or logo down">↓</button></div></div>
+                    <div class="section-order-row" data-section-id="links"><label><input type="checkbox" class="section-enabled" checked> Links</label><div><button type="button" class="btn btn-sm btn-secondary section-move-up" aria-label="Move links up">↑</button> <button type="button" class="btn btn-sm btn-secondary section-move-down" aria-label="Move links down">↓</button></div></div>
+                    <div class="section-order-row" data-section-id="share"><label><input type="checkbox" class="section-enabled" checked> Share profile</label><div><button type="button" class="btn btn-sm btn-secondary section-move-up" aria-label="Move share profile up">↑</button> <button type="button" class="btn btn-sm btn-secondary section-move-down" aria-label="Move share profile down">↓</button></div></div>
+                    <div class="section-order-row" data-section-id="qr"><label><input type="checkbox" class="section-enabled" checked> QR code</label><div><button type="button" class="btn btn-sm btn-secondary section-move-up" aria-label="Move QR code up">↑</button> <button type="button" class="btn btn-sm btn-secondary section-move-down" aria-label="Move QR code down">↓</button></div></div>
+                  </div>
+                </div>
+
                 <input type="hidden" id="form-redirect-url">
               </div>
 
@@ -462,6 +476,6 @@
   </div>
 
   <script src="/shared/qrcode.min.js"></script>
-  <script type="module" src="/admin/app.js?v=20261021-profile-background"></script>
+  <script type="module" src="/admin/app.js?v=20261021-profile-sections"></script>
 </body>
 </html>
