@@ -8,11 +8,14 @@ const normalizeTemplate = (template) => AVAILABLE_TEMPLATES.has(template) ? temp
 let isSavingProfile = false;
 let qrPreviewTimer = null;
 let qrPreviewRevision = 0;
-let qrDownloadData = { standard: null, transparent: null };
+let qrDownloadData = null;
+let profileSearchTimer = null;
+let profileLoadRevision = 0;
 
-const QR_LOGO_URL = '/assets/linkr-qr-logo.png';
 const QR_PROFILE_BASE_URL = 'https://linkr-tap.site/u/';
 const QR_ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+const QR_ARTWORK_SIZE = 1200;
+const QR_CODE_SIZE = 1120;
 
 function normalizeQrId(value) {
   return String(value || '').trim().toLowerCase().replace(/[ilo]/g, character => character === 'o' ? '0' : '1');
@@ -36,25 +39,35 @@ function drawRoundedRect(ctx, x, y, width, height, radius, fill, stroke, lineWid
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
 }
 
-async function generateStyledQr(profileUrl, format = 'standard') {
+async function generateStyledQr(profileUrl, id) {
   if (!window.QRCode?.toCanvas) throw new Error('The QR encoder did not load. Refresh the admin page and try again.');
+  if (document.fonts?.load) await document.fonts.load('700 56px "JetBrains Mono"');
 
-  const transparent = format === 'transparent';
-  const foreground = transparent ? '#ffffff' : '#000000';
-  const background = transparent ? '#ffffff00' : '#ffffff';
   const qr = window.QRCode.create(profileUrl, { errorCorrectionLevel: 'H' });
-  const canvas = document.createElement('canvas');
-  await window.QRCode.toCanvas(canvas, profileUrl, {
+  const qrCanvas = document.createElement('canvas');
+  await window.QRCode.toCanvas(qrCanvas, profileUrl, {
     errorCorrectionLevel: 'H',
     margin: 4,
-    width: 640,
-    color: { dark: foreground, light: background }
+    width: QR_CODE_SIZE,
+    color: { dark: '#000000', light: '#ffffff' }
   });
 
+  const canvas = document.createElement('canvas');
+  canvas.width = QR_ARTWORK_SIZE;
+  canvas.height = QR_ARTWORK_SIZE;
   const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('This browser could not create the QR artwork.');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  const qrSize = QR_CODE_SIZE;
+  const qrX = (canvas.width - qrSize) / 2;
+  const qrY = 10;
+  ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
   const moduleCount = qr.modules.size;
   const quietZone = 4;
-  const unit = canvas.width / (moduleCount + quietZone * 2);
+  const unit = qrSize / (moduleCount + quietZone * 2);
   const eyeSize = unit * 7;
   const eyes = [
     [quietZone, quietZone],
@@ -63,46 +76,30 @@ async function generateStyledQr(profileUrl, format = 'standard') {
   ];
 
   eyes.forEach(([col, row]) => {
-    const x = col * unit;
-    const y = row * unit;
-    if (transparent) ctx.clearRect(x, y, eyeSize, eyeSize);
-    else {
-      ctx.fillStyle = background;
-      ctx.fillRect(x, y, eyeSize, eyeSize);
-    }
-    drawRoundedRect(ctx, x + unit / 2, y + unit / 2, eyeSize - unit, eyeSize - unit, unit * 2, null, foreground, unit);
-    drawRoundedRect(ctx, x + unit * 2, y + unit * 2, unit * 3, unit * 3, unit * 0.7, foreground);
+    const x = qrX + col * unit;
+    const y = qrY + row * unit;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, eyeSize, eyeSize);
+    drawRoundedRect(ctx, x + unit / 2, y + unit / 2, eyeSize - unit, eyeSize - unit, unit * 2, null, '#000000', unit);
+    drawRoundedRect(ctx, x + unit * 2, y + unit * 2, unit * 3, unit * 3, unit * 0.7, '#000000');
   });
 
-  if (transparent) return canvas.toDataURL('image/png');
-
-  const logo = new Image();
-  logo.src = QR_LOGO_URL;
-  try {
-    await logo.decode();
-  } catch {
-    // The QR remains scannable without the optional centered brand mark.
-    return canvas.toDataURL('image/png');
-  }
-  const panelSize = canvas.width * 0.22;
-  const logoSize = canvas.width * 0.17;
-  const panelX = (canvas.width - panelSize) / 2;
-  const panelY = (canvas.height - panelSize) / 2;
-  drawRoundedRect(ctx, panelX, panelY, panelSize, panelSize, panelSize * 0.13, '#000000');
-  ctx.drawImage(logo, (canvas.width - logoSize) / 2, (canvas.height - logoSize) / 2, logoSize, logoSize);
+  ctx.fillStyle = '#000000';
+  ctx.font = '700 56px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(id).toUpperCase(), canvas.width / 2, 1164, 1040);
 
   return canvas.toDataURL('image/png');
 }
 
-function displayGeneratedQrs(standard, transparent, id) {
-  qrDownloadData = { standard, transparent };
-  for (const [format, dataUrl] of Object.entries(qrDownloadData)) {
-    const image = document.getElementById(`qr-preview-${format}`);
-    image.src = dataUrl;
-    image.hidden = false;
-    document.getElementById(`btn-download-qr-${format}`).hidden = false;
-  }
-  document.getElementById('qr-preview-status').textContent = `QR codes ready for https://linkr-tap.site/u/${id}`;
+function displayGeneratedQr(dataUrl, id) {
+  qrDownloadData = dataUrl;
+  const image = document.getElementById('qr-preview-composite');
+  image.src = dataUrl;
+  image.hidden = false;
+  document.getElementById('btn-download-qr-composite').hidden = false;
+  document.getElementById('qr-preview-status').textContent = `Print-ready QR + ${String(id).toUpperCase()} artwork for https://linkr-tap.site/u/${id}`;
 }
 
 function queueQrPreview() {
@@ -111,11 +108,9 @@ function queueQrPreview() {
   const status = document.getElementById('qr-preview-status');
   const revision = ++qrPreviewRevision;
   const clearQrPreviews = () => {
-    qrDownloadData = { standard: null, transparent: null };
-    for (const format of ['standard', 'transparent']) {
-      document.getElementById(`qr-preview-${format}`).hidden = true;
-      document.getElementById(`btn-download-qr-${format}`).hidden = true;
-    }
+    qrDownloadData = null;
+    document.getElementById('qr-preview-composite').hidden = true;
+    document.getElementById('btn-download-qr-composite').hidden = true;
   };
 
   if (document.getElementById('form-tier').value === 'direct') {
@@ -145,13 +140,10 @@ function queueQrPreview() {
   clearQrPreviews();
   qrPreviewTimer = setTimeout(async () => {
     try {
-      const [standard, transparent] = await Promise.all([
-        generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'standard'),
-        generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent')
-      ]);
+      const composite = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, id);
       if (revision !== qrPreviewRevision) return;
-      activeProfileData.qr_code = standard;
-      displayGeneratedQrs(standard, transparent, id);
+      activeProfileData.qr_code = composite;
+      displayGeneratedQr(composite, id);
       syncPreview();
     } catch (error) {
       if (revision !== qrPreviewRevision) return;
@@ -186,9 +178,13 @@ let activeProfileData = {
 document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadProfiles();
+  setupAnalytics();
   setupEditor();
   setupBatchGenerator();
   setupClientTxtIO();
+  setupResellersAndTasks();
+  loadResellers();
+  loadTasks();
 });
 
 // 1. Navigation Tabs
@@ -205,33 +201,144 @@ function setupTabs() {
       if (target === 'editor') {
         syncPreview();
       }
+      if (target === 'analytics') loadAnalytics();
+      if (target === 'resellers') loadResellers();
+      if (target === 'tasks') loadTasks();
     });
   });
 }
 
+let analyticsLoadRevision = 0;
+
+function setupAnalytics() {
+  document.getElementById('analytics-range').addEventListener('change', loadAnalytics);
+  document.getElementById('btn-refresh-analytics').addEventListener('click', loadAnalytics);
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(Number(value || 0));
+}
+
+function renderAnalyticsChart(container, rows, valueKey, label) {
+  if (!rows.length) { container.innerHTML = '<p class="analytics-empty">No activity in this period.</p>'; return; }
+  const width = 760, height = container.classList.contains('analytics-chart-small') ? 150 : 220;
+  const pad = { top: 12, right: 12, bottom: 28, left: 36 };
+  const values = rows.map(row => Number(row[valueKey] || 0));
+  const max = Math.max(1, ...values);
+  const points = values.map((value, index) => {
+    const x = pad.left + (rows.length === 1 ? 0 : index * (width - pad.left - pad.right) / (rows.length - 1));
+    const y = height - pad.bottom - value / max * (height - pad.top - pad.bottom);
+    return [x, y];
+  });
+  const path = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const area = `${path} L ${points.at(-1)[0]} ${height - pad.bottom} L ${points[0][0]} ${height - pad.bottom} Z`;
+  const stride = Math.max(1, Math.ceil(rows.length / 6));
+  const ticks = rows.map((row, index) => index % stride === 0 || index === rows.length - 1
+    ? `<text x="${points[index][0]}" y="${height - 5}" text-anchor="middle">${escapeHtml(row.day.slice(5))}</text>` : '').join('');
+  const dots = rows.length <= 31 ? points.map(([x,y],i) => `<circle cx="${x}" cy="${y}" r="2.5"><title>${escapeHtml(rows[i].day)}: ${formatNumber(values[i])}</title></circle>`).join('') : '';
+  container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="${escapeHtml(label)}">
+    <line class="chart-gridline" x1="${pad.left}" y1="${height-pad.bottom}" x2="${width-pad.right}" y2="${height-pad.bottom}"/>
+    <line class="chart-gridline" x1="${pad.left}" y1="${pad.top}" x2="${width-pad.right}" y2="${pad.top}"/>
+    <path class="chart-area" d="${area}"/><path class="chart-line" d="${path}"/>${dots}<g class="chart-labels">${ticks}</g></svg>`;
+}
+
+function renderBreakdown(container, rows) {
+  const total = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  container.innerHTML = rows.length ? rows.map(row => {
+    const count = Number(row.count || 0);
+    const percent = total ? Math.round(count / total * 100) : 0;
+    return `<div class="breakdown-row"><div class="breakdown-label"><span>${escapeHtml(row.label || 'Unspecified')}</span><strong>${formatNumber(count)}</strong></div><div class="breakdown-track"><span style="width:${percent}%"></span></div></div>`;
+  }).join('') : '<p class="analytics-empty">No records yet.</p>';
+}
+
+async function loadAnalytics() {
+  const revision = ++analyticsLoadRevision;
+  const days = document.getElementById('analytics-range').value;
+  const error = document.getElementById('analytics-error');
+  error.hidden = true;
+  document.getElementById('analytics-kpis').innerHTML = '<div class="analytics-loading">Loading analytics…</div>';
+  try {
+    const response = await fetch(`/admin/api/admin/analytics?days=${encodeURIComponent(days)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (revision !== analyticsLoadRevision) return;
+    const o = data.overview;
+    const change = o.previous_scans ? ((o.scans - o.previous_scans) / o.previous_scans) * 100 : null;
+    const changeLabel = change === null ? 'No prior-period baseline' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}% vs prior period`;
+    document.getElementById('analytics-period').textContent = `${data.range.start} through ${data.range.end} · compared with ${data.range.previous_start} through ${data.range.previous_end}`;
+    const kpis = [
+      ['QR scans', formatNumber(o.scans), changeLabel],
+      ['Scans today', formatNumber(o.scans_today), 'Recorded card opens today'],
+      ['Active profiles', formatNumber(o.active_profiles), `${formatNumber(o.total_profiles)} total profiles`],
+      ['Stock cards', formatNumber(o.stock_cards), 'Unassigned cards available'],
+      ['Open edit requests', formatNumber(o.open_edit_requests), 'Awaiting review']
+    ];
+    document.getElementById('analytics-kpis').innerHTML = kpis.map(([title,value,detail]) => `<article class="analytics-kpi"><span>${title}</span><strong>${value}</strong><small>${detail}</small></article>`).join('');
+    document.getElementById('analytics-scan-total').textContent = `${formatNumber(o.scans)} scans`;
+    const scanRows = Array.from({ length: data.range.days }, (_, index) => {
+      const date = new Date(`${data.range.start}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + index);
+      const day = date.toISOString().slice(0, 10);
+      return { day, scans: Number(data.scans_by_day.find(row => row.day === day)?.scans || 0) };
+    });
+    renderAnalyticsChart(document.getElementById('analytics-scan-chart'), scanRows, 'scans', 'Daily QR scans');
+    const profileRows = scanRows.map(row => ({ ...row, count: Number(data.profiles_by_day.find(item => item.day === row.day)?.count || 0) }));
+    renderAnalyticsChart(document.getElementById('analytics-profile-chart'), profileRows, 'count', 'Daily profile creations');
+    document.getElementById('analytics-top-profiles').innerHTML = data.top_profiles.length ? data.top_profiles.map((profile, index) => `<div class="analytics-list-row"><span class="analytics-rank">${index + 1}</span><div class="analytics-list-main"><strong>${escapeHtml(profile.name || profile.id)}</strong><small>${escapeHtml(profile.id)} · ${escapeHtml(profile.status)}</small></div><b>${formatNumber(profile.scans)}</b></div>`).join('') : '<p class="analytics-empty">No scans recorded in this period.</p>';
+    renderBreakdown(document.getElementById('analytics-status'), data.status_breakdown);
+    renderBreakdown(document.getElementById('analytics-tiers'), data.tier_breakdown);
+    renderBreakdown(document.getElementById('analytics-templates'), data.template_breakdown);
+    renderBreakdown(document.getElementById('analytics-edits'), data.edit_requests);
+    document.getElementById('analytics-batches').innerHTML = data.recent_batches.length ? data.recent_batches.map(batch => `<div class="analytics-list-row"><span class="batch-dot"></span><div class="analytics-list-main"><strong>${escapeHtml(batch.label)}</strong><small>${batch.created_at ? escapeHtml(batch.created_at.slice(0, 10)) : 'Date unavailable'}${batch.printed_at ? ' · Printed' : ''}${batch.encoded_at ? ' · Encoded' : ''}</small></div><b>${formatNumber(batch.remaining || 0)} / ${formatNumber(batch.size)}</b></div>`).join('') : '<p class="analytics-empty">No batches created yet.</p>';
+  } catch (err) {
+    if (revision !== analyticsLoadRevision) return;
+    document.getElementById('analytics-kpis').innerHTML = '';
+    error.textContent = `Could not load analytics: ${err.message}`;
+    error.hidden = false;
+  }
+}
+
 // 2. Profiles Table
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
 async function loadProfiles() {
   const tbody = document.getElementById('profiles-table-body');
   const statusFilter = document.getElementById('filter-status').value;
+  const searchTerm = document.getElementById('filter-search').value.trim();
+  const dateView = document.getElementById('filter-date-view').value;
+  const dateDay = document.getElementById('filter-date-day').value;
+  const dateSort = document.getElementById('filter-date-sort').value;
+  const revision = ++profileLoadRevision;
   document.getElementById('select-all-profiles').checked = false;
-  tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading profiles...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading profiles...</td></tr>';
 
   try {
-    const url = statusFilter ? `/admin/api/admin/profiles?status=${statusFilter}` : '/admin/api/admin/profiles';
-    const res = await fetch(url);
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status', statusFilter);
+    if (searchTerm) params.set('search', searchTerm);
+    if (dateView) params.set('date_view', dateView);
+    if (dateDay) params.set('date_day', dateDay);
+    if (dateSort) params.set('date_sort', dateSort);
+    const query = params.toString();
+    const res = await fetch(`/admin/api/admin/profiles${query ? `?${query}` : ''}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (revision !== profileLoadRevision) return;
     currentProfiles = data.profiles || [];
     renderProfilesTable(currentProfiles);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" style="color: var(--danger)">Error loading profiles: ${err.message}</td></tr>`;
+    if (revision !== profileLoadRevision) return;
+    tbody.innerHTML = `<tr><td colspan="10" style="color: var(--danger)">Error loading profiles: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
 function renderProfilesTable(profiles) {
   const tbody = document.getElementById('profiles-table-body');
   if (!profiles.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--text-muted)">No profiles found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color: var(--text-muted)">No profiles found</td></tr>';
     updateBulkDeleteButton();
     return;
   }
@@ -240,11 +347,13 @@ function renderProfilesTable(profiles) {
     <tr>
       <td><input type="checkbox" class="profile-select" data-id="${p.id}" aria-label="Select profile ${p.id}"></td>
       <td><code>${p.id}</code></td>
+      <td>${escapeHtml(p.name || '')}</td>
       <td>#${p.seq}</td>
       <td><span class="badge badge-${p.status}">${p.tier === 'direct' && p.status === 'archived' ? 'Reserved' : p.status}</span></td>
       <td>${p.tier || 'full'}</td>
       <td>${p.template || 'clean-white'}</td>
-      <td style="font-size: 0.8rem; color: var(--text-muted)">${p.updated_at ? p.updated_at.slice(0, 10) : ''}</td>
+      <td>${escapeHtml(p.reseller_name || '')}</td>
+      <td style="font-size: 0.8rem; color: var(--text-muted)">${escapeHtml(p.created_day || (p.created_at ? p.created_at.slice(0, 10) : ''))}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="window.editProfile('${p.id}')">Edit</button>
         ${p.tier === 'direct' ? '' : `<a class="btn btn-sm btn-secondary" href="/u/${p.id}" target="_blank" rel="noopener">View</a>`}
@@ -269,7 +378,7 @@ function updateBulkDeleteButton() {
   bulkButton.textContent = `Delete selected (${selected.length})`;
   bulkButton.disabled = false;
   exportButton.hidden = selected.length === 0;
-  exportButton.textContent = `Export transparent QR + ID PNGs (${selected.length})`;
+  exportButton.textContent = `Export combined QR + UID PNGs (${selected.length})`;
   exportButton.disabled = false;
   mergedExportButton.hidden = selected.length === 0;
   mergedExportButton.textContent = `Export 9 × 6 sheets ZIP (${selected.length})`;
@@ -331,24 +440,6 @@ function createZip(files) {
   return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
 }
 
-async function generateUserIdPng(id) {
-  if (document.fonts?.load) {
-    await document.fonts.load('italic 6px "JetBrains Mono"');
-  }
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.font = 'italic 6px "JetBrains Mono", monospace';
-  const metrics = ctx.measureText(id);
-  canvas.width = Math.ceil(metrics.width) + 2;
-  canvas.height = 9;
-  ctx.font = 'italic 6px "JetBrains Mono", monospace';
-  ctx.fillStyle = '#ffffff';
-  ctx.textBaseline = 'top';
-  ctx.fillText(id, 1, 1);
-  const image = await fetch(canvas.toDataURL('image/png')).then((response) => response.arrayBuffer());
-  return new Uint8Array(image);
-}
-
 function canvasToBlob(canvas) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not create the merged PNG.')), 'image/png');
@@ -361,22 +452,20 @@ async function loadImage(src) {
   await image.decode();
   return image;
 }
-async function invertPngColors(data, fillWhiteBackground = false) {
-  const isDataUrl = typeof data === 'string';
-  const src = isDataUrl ? data : URL.createObjectURL(new Blob([data], { type: 'image/png' }));
-  try {
-    const image = await loadImage(src);
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
+
+async function invertPngColors(dataUrl, fillWhiteBackground = false) {
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('This browser could not create the inverted QR artwork.');
     ctx.drawImage(image, 0, 0);
-    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    for (let index = 0; index < pixels.data.length; index += 4) {
-      pixels.data[index] = 255 - pixels.data[index];
-      pixels.data[index + 1] = 255 - pixels.data[index + 1];
-      pixels.data[index + 2] = 255 - pixels.data[index + 2];
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    pixels.data[index] = 255 - pixels.data[index];
+    pixels.data[index + 1] = 255 - pixels.data[index + 1];
+    pixels.data[index + 2] = 255 - pixels.data[index + 2];
     }
     ctx.putImageData(pixels, 0, 0);
     let outputCanvas = canvas;
@@ -391,10 +480,7 @@ async function invertPngColors(data, fillWhiteBackground = false) {
       outputCtx.drawImage(canvas, 0, 0);
     }
     const blob = await canvasToBlob(outputCanvas);
-    return new Uint8Array(await blob.arrayBuffer());
-  } finally {
-    if (!isDataUrl) URL.revokeObjectURL(src);
-  }
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 async function exportMergedQrSheet() {
@@ -413,7 +499,7 @@ async function exportMergedQrSheet() {
   const columns = 9;
   const rowsPerPage = 6;
   const perPage = columns * rowsPerPage;
-  const qrSize = 360;
+  const qrSize = 400;
   const cellWidth = 420;
   const cellHeight = 420;
   const gap = 24;
@@ -421,7 +507,7 @@ async function exportMergedQrSheet() {
   const files = [];
   const pageCount = Math.ceil(exportable.length / perPage);
   try {
-    await document.fonts.load('italic 700 26px "JetBrains Mono"');
+    await document.fonts.load('700 56px "JetBrains Mono"');
     for (let page = 0; page < pageCount; page++) {
       const pageProfiles = exportable.slice(page * perPage, (page + 1) * perPage);
       const canvas = document.createElement('canvas');
@@ -429,22 +515,17 @@ async function exportMergedQrSheet() {
       canvas.height = margin * 2 + rowsPerPage * cellHeight + (rowsPerPage - 1) * gap;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('This browser could not create the merged PNG canvas.');
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'italic 700 26px "JetBrains Mono", monospace';
-
+      ctx.imageSmoothingEnabled = false;
       for (let index = 0; index < pageProfiles.length; index++) {
         const id = pageProfiles[index].id;
         button.textContent = `Building sheet ${page + 1}/${pageCount} (${index + 1}/${pageProfiles.length})...`;
-        const qrData = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent');
+        const qrData = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, id);
         const qrImage = await loadImage(qrData);
         const column = index % columns;
         const row = Math.floor(index / columns);
         const cellX = margin + column * (cellWidth + gap);
         const cellY = margin + row * (cellHeight + gap);
-        ctx.drawImage(qrImage, cellX + (cellWidth - qrSize) / 2, cellY, qrSize, qrSize);
-        ctx.fillText(id, cellX + cellWidth / 2, cellY + qrSize + 20, cellWidth - 12);
+        ctx.drawImage(qrImage, cellX + (cellWidth - qrSize) / 2, cellY + (cellHeight - qrSize) / 2, qrSize, qrSize);
       }
 
       const blob = await canvasToBlob(canvas);
@@ -474,7 +555,7 @@ async function exportMergedQrSheet() {
   }
 }
 
-async function exportSelectedTransparentQrs() {
+async function exportSelectedQrUidArtworks() {
   const selectedIds = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
   if (!selectedIds.length) return;
   const selectedProfiles = selectedIds.map((id) => currentProfiles.find((profile) => profile.id === id)).filter(Boolean);
@@ -491,23 +572,21 @@ async function exportSelectedTransparentQrs() {
     for (let index = 0; index < exportable.length; index++) {
       const id = exportable[index].id;
       button.textContent = `Generating ${index + 1}/${exportable.length}...`;
-      const dataUrl = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent');
+      const dataUrl = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, id);
       const image = await fetch(dataUrl).then((response) => response.arrayBuffer());
-      files.push({ name: `${id}-qr-transparent.png`, data: new Uint8Array(image) });
-      files.push({ name: `${id}-qr-transparent (black).png`, data: await invertPngColors(dataUrl) });
-      files.push({ name: `${id}-userid.png`, data: await generateUserIdPng(id) });
-      files.push({ name: `${id}-userid (black).png`, data: await invertPngColors(await generateUserIdPng(id)) });
+      files.push({ name: `${id}-qr-uid.png`, data: new Uint8Array(image) });
+      files.push({ name: `${id}-qr-uid (black).png`, data: await invertPngColors(dataUrl) });
     }
     const zip = createZip(files);
     const url = URL.createObjectURL(zip);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `linkr-transparent-qr-${new Date().toISOString().slice(0, 10)}.zip`;
+    anchor.download = `linkr-qr-uid-artworks-${new Date().toISOString().slice(0, 10)}.zip`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    if (skipped) alert(`Exported ${files.length} transparent QR codes. Skipped ${skipped} direct-social record${skipped === 1 ? '' : 's'} because they do not use profile QR codes.`);
+    if (skipped) alert(`Exported ${files.length} combined QR + UID artworks. Skipped ${skipped} direct-social record${skipped === 1 ? '' : 's'} because they do not use profile QR codes.`);
   } catch (error) {
     alert(`Could not export QR codes: ${error.message}`);
   } finally {
@@ -562,6 +641,176 @@ async function deleteSelectedProfiles() {
     alert(`Deleted ${ids.length - failures.length} of ${ids.length} profiles.\n\nCould not delete:\n${failures.join('\n')}`);
   }
 }
+
+let adminResellers = [];
+let adminTasks = [];
+
+async function loadResellers() {
+  try {
+    const response = await fetch('/admin/api/admin/resellers');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    adminResellers = data.resellers || [];
+    const editorSelect = document.getElementById('form-reseller-id');
+    const taskSelect = document.getElementById('task-reseller');
+    const selectedEditor = editorSelect.value;
+    const selectedTask = taskSelect.value;
+    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    taskSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    editorSelect.value = selectedEditor;
+    taskSelect.value = selectedTask;
+    document.getElementById('reseller-list').innerHTML = adminResellers.length ? adminResellers.map(r => `
+      <div class="analytics-list-row"><span class="analytics-rank">${Number(r.resale_count || 0)}</span><div class="analytics-list-main"><strong>${escapeHtml(r.name)}</strong><small>${escapeHtml(r.code)}${r.contact ? ` · ${escapeHtml(r.contact)}` : ''}</small></div><button class="btn btn-sm btn-secondary" type="button" onclick="window.editReseller(${Number(r.id)})">Edit</button></div>`).join('') : '<p class="analytics-empty">No resellers yet. Add one to start tracking sales.</p>';
+    document.getElementById('recent-resells-body').innerHTML = data.recent_resells?.length ? data.recent_resells.map(row => `<tr><td>${escapeHtml(row.created_day || (row.created_at || '').slice(0, 10))}</td><td>${escapeHtml(row.client_name || '')}</td><td><code>${escapeHtml(row.id)}</code></td><td>${escapeHtml(row.reseller_name || '')}</td><td>${escapeHtml(row.tier || '')}</td></tr>`).join('') : '<tr><td colspan="5" class="analytics-empty">No reseller-linked profiles yet.</td></tr>';
+  } catch (error) {
+    document.getElementById('reseller-list').innerHTML = `<p class="analytics-error">Could not load resellers: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function loadTasks() {
+  try {
+    const response = await fetch('/admin/api/admin/tasks');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    adminTasks = data.tasks || [];
+    if (!adminResellers.length) adminResellers = data.resellers || [];
+    const editorSelect = document.getElementById('form-reseller-id');
+    const editorValue = editorSelect.value;
+    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    editorSelect.value = editorValue;
+    const resellerSelect = document.getElementById('task-reseller');
+    const resellerValue = resellerSelect.value;
+    resellerSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    resellerSelect.value = resellerValue;
+    const clientSelect = document.getElementById('task-clients');
+    const prior = new Set([...clientSelect.selectedOptions].map(option => option.value));
+    clientSelect.innerHTML = (data.clients || []).map(client => `<option value="${escapeHtml(client.name)}">${escapeHtml(client.name)} · ${escapeHtml(client.id)}</option>`).join('');
+    [...clientSelect.options].forEach(option => { option.selected = prior.has(option.value); });
+    renderAdminTasks();
+  } catch (error) {
+    document.getElementById('task-list').innerHTML = `<p class="analytics-error">Could not load tasks: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderAdminTasks() {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const daysUntil = task => Math.ceil((new Date(`${task.deadline}T00:00:00`) - now) / 86400000);
+  const openTasks = adminTasks.filter(task => !Number(task.completed));
+  const overdue = openTasks.filter(task => daysUntil(task) < 0);
+  const near = openTasks.filter(task => daysUntil(task) >= 0 && daysUntil(task) <= 3);
+  document.getElementById('task-alerts').innerHTML = `<span class="task-alert alert-danger">${overdue.length} overdue</span><span class="task-alert alert-warning">${near.length} due within 3 days</span><span class="task-alert alert-neutral">${openTasks.length} open tasks</span>`;
+  const filter = document.getElementById('task-filter').value;
+  const filtered = adminTasks.filter(task => {
+    if (filter === 'near') return !Number(task.completed) && daysUntil(task) >= 0 && daysUntil(task) <= 3;
+    if (filter === 'overdue') return !Number(task.completed) && daysUntil(task) < 0;
+    if (['system', 'printing', 'add_client'].includes(filter)) return task.category === filter;
+    return true;
+  });
+  document.getElementById('task-list').innerHTML = filtered.length ? filtered.map(task => {
+    let clients = task.client_name || '';
+    try { clients = clients || JSON.parse(task.client_names || '[]').join(', '); } catch {}
+    const due = daysUntil(task);
+    return `<article class="task-card ${Number(task.completed) ? 'task-complete' : ''}">
+      <div class="task-card-head"><span class="badge task-category-${escapeHtml(task.category)}">${escapeHtml(task.category.replace('_', ' '))}</span><span class="task-deadline ${due < 0 && !Number(task.completed) ? 'is-overdue' : due <= 3 && !Number(task.completed) ? 'is-near' : ''}">${escapeHtml(task.deadline)}${due < 0 && !Number(task.completed) ? ' · overdue' : ''}</span></div>
+      <strong>${escapeHtml(task.title)}</strong><p>${escapeHtml(task.description || '')}</p>
+      <small>${escapeHtml([task.reseller_name, clients, task.package].filter(Boolean).join(' · '))}</small>
+      <div class="task-card-actions"><button class="btn btn-sm btn-secondary" onclick="window.toggleAdminTask(${Number(task.id)})">${Number(task.completed) ? 'Reopen' : 'Complete'}</button><button class="btn btn-sm btn-secondary" onclick="window.editAdminTask(${Number(task.id)})">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteAdminTask(${Number(task.id)})">Delete</button></div>
+    </article>`;
+  }).join('') : '<p class="analytics-empty">No tasks match this view.</p>';
+}
+
+function resetResellerForm() {
+  document.getElementById('reseller-edit-id').value = '';
+  document.getElementById('reseller-name').value = '';
+  document.getElementById('reseller-contact').value = '';
+  document.getElementById('reseller-form-title').textContent = 'Add reseller';
+  document.getElementById('btn-cancel-reseller').hidden = true;
+}
+
+function resetAdminTaskForm() {
+  document.getElementById('task-form').reset();
+  document.getElementById('task-edit-id').value = '';
+  document.getElementById('task-form-title').textContent = 'Create task';
+  document.getElementById('btn-cancel-task').hidden = true;
+  setAdminTaskFields();
+}
+
+function setAdminTaskFields() {
+  const category = document.getElementById('task-category').value;
+  document.querySelectorAll('.task-field-system').forEach(node => { node.hidden = category !== 'system'; });
+  document.querySelectorAll('.task-field-printing').forEach(node => { node.hidden = category !== 'printing'; });
+  document.querySelectorAll('.task-field-client').forEach(node => { node.hidden = category !== 'add_client'; });
+  document.getElementById('task-reseller').required = category === 'add_client';
+  document.getElementById('task-client-name').required = category === 'add_client';
+  document.getElementById('task-package').required = category === 'add_client';
+}
+
+function setupResellersAndTasks() {
+  document.getElementById('filter-date-view').addEventListener('change', loadProfiles);
+  document.getElementById('filter-date-day').addEventListener('change', loadProfiles);
+  document.getElementById('filter-date-sort').addEventListener('change', loadProfiles);
+  document.getElementById('task-category').addEventListener('change', setAdminTaskFields);
+  document.getElementById('task-filter').addEventListener('change', renderAdminTasks);
+  document.getElementById('btn-refresh-resellers').addEventListener('click', loadResellers);
+  document.getElementById('btn-refresh-tasks').addEventListener('click', loadTasks);
+  document.getElementById('btn-cancel-reseller').addEventListener('click', resetResellerForm);
+  document.getElementById('btn-cancel-task').addEventListener('click', resetAdminTaskForm);
+  document.getElementById('reseller-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const payload = { id: Number(document.getElementById('reseller-edit-id').value) || undefined, name: document.getElementById('reseller-name').value.trim(), contact: document.getElementById('reseller-contact').value.trim() };
+    try { const response = await fetch('/admin/api/admin/resellers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Save failed'); resetResellerForm(); await loadResellers(); await loadTasks(); }
+    catch (error) { alert(`Could not save reseller: ${error.message}`); }
+  });
+  document.getElementById('task-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const category = document.getElementById('task-category').value;
+    const dateId = 'task-deadline';
+    const payload = { id: Number(document.getElementById('task-edit-id').value) || undefined, category, title: document.getElementById('task-title').value.trim(), description: document.getElementById('task-description').value.trim(), reseller_id: Number(document.getElementById('task-reseller').value) || null, client_name: document.getElementById('task-client-name').value.trim(), package: document.getElementById('task-package').value.trim(), client_names: [...document.getElementById('task-clients').selectedOptions].map(option => option.value), deadline: document.getElementById(dateId)?.value || '' };
+    try { const response = await fetch('/admin/api/admin/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Save failed'); resetAdminTaskForm(); await loadTasks(); }
+    catch (error) { alert(`Could not save task: ${error.message}`); }
+  });
+  setAdminTaskFields();
+}
+
+window.editReseller = id => {
+  const reseller = adminResellers.find(item => Number(item.id) === Number(id)); if (!reseller) return;
+  document.getElementById('reseller-edit-id').value = reseller.id;
+  document.getElementById('reseller-name').value = reseller.name || '';
+  document.getElementById('reseller-contact').value = reseller.contact || '';
+  document.getElementById('reseller-form-title').textContent = 'Edit reseller';
+  document.getElementById('btn-cancel-reseller').hidden = false;
+};
+
+window.editAdminTask = id => {
+  const task = adminTasks.find(item => Number(item.id) === Number(id)); if (!task) return;
+  document.getElementById('task-edit-id').value = task.id;
+  document.getElementById('task-category').value = task.category;
+  document.getElementById('task-title').value = task.category === 'system' ? task.title : '';
+  document.getElementById('task-description').value = task.description || '';
+  document.getElementById('task-reseller').value = task.reseller_id || '';
+  document.getElementById('task-client-name').value = task.client_name || '';
+  document.getElementById('task-package').value = task.package || '';
+  document.getElementById('task-deadline').value = task.deadline || '';
+  let clients = []; try { clients = JSON.parse(task.client_names || '[]'); } catch {}
+  if (!clients.length && task.client_name) clients = [task.client_name];
+  [...document.getElementById('task-clients').options].forEach(option => { option.selected = clients.includes(option.value); });
+  document.getElementById('task-form-title').textContent = `Edit task #${task.id}`;
+  document.getElementById('btn-cancel-task').hidden = false;
+  setAdminTaskFields();
+  document.getElementById('task-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.toggleAdminTask = async id => {
+  const task = adminTasks.find(item => Number(item.id) === Number(id)); if (!task) return;
+  try { const response = await fetch('/admin/api/admin/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...task, id, completed: !Number(task.completed), client_names: JSON.parse(task.client_names || '[]') }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Update failed'); await loadTasks(); }
+  catch (error) { alert(`Could not update task: ${error.message}`); }
+};
+
+window.deleteAdminTask = async id => {
+  if (!confirm('Delete this task?')) return;
+  try { const response = await fetch(`/admin/api/admin/tasks?id=${id}`, { method: 'DELETE' }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Delete failed'); await loadTasks(); }
+  catch (error) { alert(`Could not delete task: ${error.message}`); }
+};
 
 // 3. Editor Setup & Real-time Live Preview
 function setupEditor() {
@@ -674,19 +923,17 @@ function setupEditor() {
     if (val) image.src = val;
     else image.removeAttribute('src');
   });
-  for (const format of ['standard', 'transparent']) {
-    document.getElementById(`btn-download-qr-${format}`).addEventListener('click', () => {
-    const dataUrl = qrDownloadData[format];
+  document.getElementById('btn-download-qr-composite').addEventListener('click', () => {
+    const dataUrl = qrDownloadData;
     if (!dataUrl) return;
     const id = normalizeQrId(document.getElementById('edit-id').value || document.getElementById('form-id').value);
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `${id || 'linkr-profile'}-qr-${format}.png`;
+    link.download = `${(id || 'linkr-profile').toUpperCase()}-qr-uid.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    });
-  }
+  });
 
   document.getElementById('btn-save-profile').addEventListener('click', saveProfile);
   document.getElementById('btn-refresh-preview').addEventListener('click', syncPreview);
@@ -697,6 +944,10 @@ function setupEditor() {
 
   document.getElementById('btn-refresh-profiles').addEventListener('click', loadProfiles);
   document.getElementById('filter-status').addEventListener('change', loadProfiles);
+  document.getElementById('filter-search').addEventListener('input', () => {
+    clearTimeout(profileSearchTimer);
+    profileSearchTimer = setTimeout(loadProfiles, 250);
+  });
   document.getElementById('select-all-profiles').addEventListener('change', (event) => {
     document.querySelectorAll('.profile-select').forEach((checkbox) => { checkbox.checked = event.target.checked; });
     updateBulkDeleteButton();
@@ -705,7 +956,7 @@ function setupEditor() {
     if (event.target.matches('.profile-select')) updateBulkDeleteButton();
   });
   document.getElementById('btn-delete-selected').addEventListener('click', deleteSelectedProfiles);
-  document.getElementById('btn-export-selected-qr').addEventListener('click', exportSelectedTransparentQrs);
+  document.getElementById('btn-export-selected-qr').addEventListener('click', exportSelectedQrUidArtworks);
   document.getElementById('btn-export-merged-qr').addEventListener('click', exportMergedQrSheet);
 }
 
@@ -798,6 +1049,7 @@ function addLinkRow(link = { type: 'custom', value: '', label: '' }) {
 function populateForm(data) {
   activeProfileData = data;
   document.getElementById('form-name').value = data.name || '';
+  document.getElementById('form-reseller-id').value = data.reseller_id || '';
   document.getElementById('form-company').value = data.company || '';
   document.getElementById('form-title').value = data.title || '';
   document.getElementById('form-title-link').value = data.title_link || '';
@@ -916,6 +1168,7 @@ function updateDataFromForm() {
       ? (/^https?:\/\//i.test(redirectLink) ? redirectLink : `https://${redirectLink}`)
       : null,
     name: document.getElementById('form-name').value.trim(),
+    reseller_id: Number(document.getElementById('form-reseller-id').value) || null,
     company: tier === 'full' ? document.getElementById('form-company').value.trim() : '',
     title: tier === 'full' ? document.getElementById('form-title').value.trim() : '',
     title_link: tier === 'full' ? (document.getElementById('form-title-link').value.trim() || null) : null,
@@ -946,9 +1199,11 @@ function syncPreview() {
 
 window.editProfile = async function(id) {
   try {
+    await loadResellers();
     const res = await fetch(`/admin/api/admin/profiles?id=${id}`);
     if (!res.ok) throw new Error('Failed to load profile');
     const { profile, data } = await res.json();
+    data.reseller_id = data.reseller_id || profile.retailer_id || null;
 
     document.getElementById('editor-title').textContent = `Editing: ${id}`;
     document.getElementById('edit-id').value = id;
@@ -989,12 +1244,8 @@ async function saveProfile() {
     let qrCode = null;
     if (tier !== 'direct') {
       const profileUrl = `${QR_PROFILE_BASE_URL}${id}`;
-      const [standard, transparent] = await Promise.all([
-        generateStyledQr(profileUrl, 'standard'),
-        generateStyledQr(profileUrl, 'transparent')
-      ]);
-      qrCode = standard;
-      displayGeneratedQrs(standard, transparent, id);
+      qrCode = await generateStyledQr(profileUrl, id);
+      displayGeneratedQr(qrCode, id);
     }
     activeProfileData.qr_code = qrCode;
     const payload = {

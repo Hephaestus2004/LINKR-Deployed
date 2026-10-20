@@ -94,25 +94,51 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // List latest 100 profiles
+    // List latest profiles, with optional status and substring search.
     const statusFilter = url.searchParams.get('status');
-    const visibleProfileFilter = `COALESCE(json_extract(data, '$.deleted'), 0) = 0
+    const searchTerm = (url.searchParams.get('search') || '').trim().slice(0, 80);
+    const dateView = url.searchParams.get('date_view') || '';
+    const dateDay = url.searchParams.get('date_day') || '';
+    const dateSort = url.searchParams.get('date_sort') === 'oldest' ? 'ASC' : 'DESC';
+    const visibleProfileFilter = `COALESCE(json_extract(p.data, '$.deleted'), 0) = 0
       AND NOT (
-        status = 'archived'
-        AND COALESCE(json_extract(data, '$.name'), '') = ''
-        AND COALESCE(json_array_length(json_extract(data, '$.links')), 0) = 0
+        p.status = 'archived'
+        AND COALESCE(json_extract(p.data, '$.name'), '') = ''
+        AND COALESCE(json_array_length(json_extract(p.data, '$.links')), 0) = 0
       )`;
-    const query = statusFilter
-      ? `SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles
-         WHERE status = ? AND status != 'deleted' AND ${visibleProfileFilter}
-         ORDER BY seq DESC LIMIT 100`
-      : `SELECT id, seq, status, tier, template, updated_at, created_at FROM profiles
-         WHERE status != 'deleted' AND ${visibleProfileFilter}
-         ORDER BY seq DESC LIMIT 100`;
+    const filters = [`p.status != 'deleted'`, visibleProfileFilter];
+    const bindings: string[] = [];
+    if (statusFilter) {
+      filters.push('p.status = ?');
+      bindings.push(statusFilter);
+    }
+    if (searchTerm) {
+      filters.push(`(
+        instr(lower(p.id), lower(?)) > 0
+        OR instr(lower(COALESCE(json_extract(p.data, '$.name'), '')), lower(?)) > 0
+      )`);
+      bindings.push(searchTerm, searchTerm);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateDay)) {
+      filters.push("date(datetime(p.created_at, '+8 hours')) = ?");
+      bindings.push(dateDay);
+    }
+    if (dateView === 'today') filters.push("date(datetime(p.created_at, '+8 hours')) = date(datetime('now', '+8 hours'))");
+    else if (dateView === 'yesterday') filters.push("date(datetime(p.created_at, '+8 hours')) = date(datetime('now', '+8 hours', '-1 day'))");
+    else if (dateView === '7') filters.push("datetime(p.created_at, '+8 hours') >= datetime('now', '+8 hours', '-7 days')");
+    else if (dateView === '30') filters.push("datetime(p.created_at, '+8 hours') >= datetime('now', '+8 hours', '-30 days')");
+    else if (dateView === 'month') filters.push("strftime('%Y-%m', datetime(p.created_at, '+8 hours')) = strftime('%Y-%m', datetime('now', '+8 hours'))");
+    else if (dateView === 'year') filters.push("strftime('%Y', datetime(p.created_at, '+8 hours')) = strftime('%Y', datetime('now', '+8 hours'))");
 
-    const stmt = statusFilter
-      ? env.DB.prepare(query).bind(statusFilter)
-      : env.DB.prepare(query);
+    const query = `SELECT p.id, p.seq, p.status, p.tier, p.template,
+      COALESCE(json_extract(p.data, '$.name'), '') AS name, p.updated_at, p.created_at,
+      date(datetime(p.created_at, '+8 hours')) AS created_day,
+      p.retailer_id AS reseller_id, r.name AS reseller_name FROM profiles p
+      LEFT JOIN retailers r ON r.id = p.retailer_id
+      WHERE ${filters.join(' AND ')}
+      ORDER BY p.created_at ${dateSort}, p.seq DESC LIMIT 500`;
+    const prepared = env.DB.prepare(query);
+    const stmt = bindings.length ? prepared.bind(...bindings) : prepared;
 
     const list = await stmt.all();
 
@@ -138,7 +164,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       tier?: string;
       template?: string;
       status?: ProfileStatus;
-      profile: ProfileData;
+      is_new?: boolean;
+      profile: ProfileData & { reseller_id?: number | null };
       reason?: string;
     };
 
@@ -157,7 +184,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const isNew = Boolean(body.is_new);
-    const saveProfileData = async (profileId: string) => JSON.stringify(await storeProfileImages(env, profileId, body.profile));
+    const saveProfileData = async (profileId: string) => {
+      const { reseller_id: _adminResellerId, ...profileData } = body.profile;
+      return JSON.stringify(await storeProfileImages(env, profileId, profileData));
+    };
 
     // 1. If Editing existing profile (not new)
     if (id && !isNew) {
@@ -175,6 +205,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
       const nextVersion = (existing.version || 1) + 1;
       const dataJson = await saveProfileData(id);
+      const resellerId = Number(body.profile.reseller_id) || null;
 
       // Write version row
       await env.DB.prepare(`
@@ -189,11 +220,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             version = ?,
             template = ?,
             tier = ?,
+            retailer_id = ?,
             status = ?,
             updated_at = datetime('now'),
             activated_at = CASE WHEN activated_at IS NULL AND ? = 'active' THEN datetime('now') ELSE activated_at END
         WHERE id = ?
-      `).bind(dataJson, nextVersion, template, tier, status, status, id).run();
+      `).bind(dataJson, nextVersion, template, tier, resellerId, status, status, id).run();
 
       return new Response(JSON.stringify({
         success: true,
@@ -219,6 +251,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           // Activating an existing unassigned stock card
           const nextVersion = (existing.version || 1) + 1;
           const dataJson = await saveProfileData(id);
+          const resellerId = Number(body.profile.reseller_id) || null;
           await env.DB.prepare(`
             INSERT INTO profile_versions (profile_id, version, data, changed_by, reason)
             VALUES (?, ?, ?, 'admin', 'Activated from unassigned stock')
@@ -230,11 +263,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 version = ?,
                 template = ?,
                 tier = ?,
+                retailer_id = ?,
                 status = ?,
                 updated_at = datetime('now'),
                 activated_at = CASE WHEN ? = 'active' THEN datetime('now') ELSE activated_at END
             WHERE id = ?
-          `).bind(dataJson, nextVersion, template, tier, status, status, id).run();
+          `).bind(dataJson, nextVersion, template, tier, resellerId, status, status, id).run();
 
           return new Response(JSON.stringify({
             success: true,
@@ -290,11 +324,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ max_seq: number }>();
     const nextSeq = (maxSeq?.max_seq || 0) + 1;
     const dataJson = await saveProfileData(id);
+    const resellerId = Number(body.profile.reseller_id) || null;
 
     await env.DB.prepare(`
-      INSERT INTO profiles (id, seq, status, tier, template, data, version, activated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'))
-    `).bind(id, nextSeq, status, tier, template, dataJson).run();
+      INSERT INTO profiles (id, seq, status, tier, template, data, retailer_id, version, activated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
+    `).bind(id, nextSeq, status, tier, template, dataJson, resellerId).run();
 
     await env.DB.prepare(`
       INSERT INTO profile_versions (profile_id, version, data, changed_by, reason)

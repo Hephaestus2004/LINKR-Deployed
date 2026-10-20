@@ -28,6 +28,7 @@ export interface ProfileShowFlags {
   bio?: boolean;
   photo?: boolean;
   company_logo?: boolean;
+  large_logo?: boolean;
 }
 
 export interface ProfileData {
@@ -43,6 +44,8 @@ export interface ProfileData {
   photo?: string | null;
   company_logo?: string | null;
   qr_code?: string | null;
+  primary_action_label?: string;
+  primary_action_url?: string;
   vcard?: string | null;
   show?: ProfileShowFlags;
   theme?: ProfileTheme;
