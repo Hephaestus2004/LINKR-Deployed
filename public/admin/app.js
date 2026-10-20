@@ -361,7 +361,7 @@ async function loadImage(src) {
   await image.decode();
   return image;
 }
-async function invertPngColors(data) {
+async function invertPngColors(data, fillWhiteBackground = false) {
   const isDataUrl = typeof data === 'string';
   const src = isDataUrl ? data : URL.createObjectURL(new Blob([data], { type: 'image/png' }));
   try {
@@ -371,6 +371,10 @@ async function invertPngColors(data) {
     canvas.height = image.naturalHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('This browser could not create the inverted QR artwork.');
+    if (fillWhiteBackground) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.drawImage(image, 0, 0);
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
     for (let index = 0; index < pixels.data.length; index += 4) {
@@ -438,7 +442,12 @@ async function exportMergedQrSheet() {
 
       const blob = await canvasToBlob(canvas);
       const data = await blob.arrayBuffer();
-      files.push({ name: `linkr-qr-sheet-${String(page + 1).padStart(2, '0')}.png`, data: new Uint8Array(data) });
+      const sheetNumber = String(page + 1).padStart(2, '0');
+      files.push({ name: `linkr-qr-sheet-${sheetNumber}.png`, data: new Uint8Array(data) });
+      files.push({
+        name: `linkr-qr-sheet-${sheetNumber} (black).png`,
+        data: await invertPngColors(new Uint8Array(data), true),
+      });
     }
 
     const blob = createZip(files);
