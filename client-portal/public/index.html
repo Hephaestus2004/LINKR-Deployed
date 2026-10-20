@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Build your LINKR profile</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="LINKR client editor">LINKR <span>PROFILE DESIGN</span></a></header>
+  <main>
+    <section id="access-state" class="notice" aria-live="polite">Checking your private invitation…</section>
+
+    <section id="request-screen" hidden>
+      <header class="page-heading">
+        <p class="eyebrow">YOUR DIGITAL CONTACT PROFILE</p>
+        <h1>Start with your information</h1>
+        <p>Fill in the details first. You’ll see a preview next and can choose a safe layout, style, icons, and sections before sending it for review.</p>
+      </header>
+
+      <form id="profile-form" class="panel">
+        <h2>Profile details</h2>
+        <div class="field-grid">
+          <label>Full name <input id="name" maxlength="60" autocomplete="name" required></label>
+          <label>Business / organization <input id="company" maxlength="80" autocomplete="organization"></label>
+          <label>Title <input id="title" maxlength="80" autocomplete="organization-title"></label>
+          <label>Title link <input id="title-link" type="url" maxlength="500" placeholder="https://example.com"></label>
+          <label class="wide">Short description <textarea id="bio" maxlength="300" rows="3"></textarea></label>
+          <label>Location <input id="location" maxlength="120" autocomplete="address-level2"></label>
+        </div>
+
+        <section class="upload-grid" aria-label="Profile images">
+          <label>Profile photo <input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><small>Optional · up to 300 KB after compression</small></label>
+          <label>Logo <input id="company-logo" type="file" accept="image/png,image/jpeg,image/webp"><small>Optional · up to 200 KB after compression</small></label>
+          <label class="wide">Page background image <input id="background-image" type="file" accept="image/png,image/jpeg,image/webp"><small>Optional · up to 500 KB after compression</small></label>
+        </section>
+
+        <div class="section-heading"><div><h2>Contact links</h2><p>Add at least one. You can add up to 15.</p></div><button id="add-link" class="button secondary" type="button">Add link</button></div>
+        <div id="link-fields" class="link-fields"></div>
+        <p id="form-error" class="error" role="alert" hidden></p>
+        <button class="button primary" type="submit">Continue to preview</button>
+      </form>
+    </section>
+
+    <section id="design-screen" hidden>
+      <header class="page-heading">
+        <p class="eyebrow">DESIGN PREVIEW</p>
+        <h1>Choose your look</h1>
+        <p>This preview uses fixed LINKR components. Your text and images stay data; custom code and markup aren’t accepted.</p>
+      </header>
+      <div class="design-grid">
+        <div class="panel design-controls">
+          <label>Layout preset
+            <select id="template">
+              <option value="clean-white">Clean White</option>
+              <option value="glass-dark">Monochrome Photo</option>
+              <option value="luxury-gold">Gold Glass</option>
+              <option value="bold-pop">Logo-led Clean</option>
+            </select>
+          </label>
+          <label>Profile emphasis
+            <select id="profile-mode"><option value="standard">Name and profile details</option><option value="logo_only">Logo first</option></select>
+          </label>
+          <label>Color and style
+            <select id="theme-preset">
+              <option value="monochrome-photo">Monochrome</option>
+              <option value="gold-glass">Gold Glass</option>
+              <option value="gold-clean">Gold Clean</option>
+            </select>
+          </label>
+          <label>Accent color <input id="accent" type="color" value="#e8c76a"></label>
+          <label>Icon pack
+            <select id="icon-pack"><option value="classic">Classic</option><option value="bold">Bold</option></select>
+          </label>
+          <div class="section-heading"><div><h2>Page sections</h2><p>Turn sections on/off and set their order.</p></div></div>
+          <div id="sections-list" class="section-list">
+            <div class="section-row" data-section="identity"><label><input class="section-enabled" type="checkbox" checked> Name / logo</label><span><button type="button" class="move-up" aria-label="Move name or logo up">↑</button><button type="button" class="move-down" aria-label="Move name or logo down">↓</button></span></div>
+            <div class="section-row" data-section="links"><label><input class="section-enabled" type="checkbox" checked> Links</label><span><button type="button" class="move-up" aria-label="Move links up">↑</button><button type="button" class="move-down" aria-label="Move links down">↓</button></span></div>
+            <div class="section-row" data-section="share"><label><input class="section-enabled" type="checkbox" checked> Share profile</label><span><button type="button" class="move-up" aria-label="Move share profile up">↑</button><button type="button" class="move-down" aria-label="Move share profile down">↓</button></span></div>
+            <div class="section-row" data-section="qr"><label><input class="section-enabled" type="checkbox" checked> QR code</label><span><button type="button" class="move-up" aria-label="Move QR code up">↑</button><button type="button" class="move-down" aria-label="Move QR code down">↓</button></span></div>
+          </div>
+          <p id="design-error" class="error" role="alert" hidden></p>
+          <div class="button-row"><button id="back-to-info" class="button secondary" type="button">Back to information</button><button id="submit-request" class="button primary" type="button">Send for review</button></div>
+        </div>
+        <div class="preview-wrap">
+          <div class="phone"><div class="preview-page" id="preview-page"><img id="preview-bg" class="preview-bg" alt=""><div class="preview-content">
+            <section id="preview-identity" class="preview-section"><img id="preview-logo" class="preview-logo" alt="" hidden><img id="preview-photo" class="preview-photo" alt="" hidden><div id="preview-name" class="preview-name"></div><div id="preview-company" class="preview-company"></div><div id="preview-title" class="preview-title"></div><p id="preview-bio" class="preview-bio"></p></section>
+            <section id="preview-links" class="preview-section preview-links"></section>
+            <section id="preview-share" class="preview-section"><button class="preview-action" type="button" tabindex="-1">Share profile</button></section>
+            <section id="preview-qr" class="preview-section"><div class="qr-placeholder" aria-label="QR code preview"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><small>QR code added after approval</small></section>
+          </div></div></div>
+          <p class="preview-note">Your final profile will be reviewed before it can go live.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="submitted-screen" class="panel success-panel" hidden aria-live="polite">
+      <p class="eyebrow">REQUEST SENT</p><h1>Thank you</h1>
+      <p>Your request reference is:</p><strong id="request-reference" class="request-reference"></strong>
+      <p>Keep this reference. Only people with this invitation link can view your request status.</p>
+      <p id="request-expiry" class="muted"></p>
+    </section>
+  </main>
+  <footer>LINKR · Profile requests stay private until review and approval.</footer>
+</body>
+</html>
