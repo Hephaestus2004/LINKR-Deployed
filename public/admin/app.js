@@ -881,6 +881,25 @@ function setupEditor() {
     previewIframe.src = `/t/${tmpl}/index.html`;
   });
 
+  document.getElementById('form-theme-preset').addEventListener('change', () => {
+    const presetAccent = {
+      'monochrome-photo': '#ffffff',
+      'gold-glass': '#e8c76a',
+      'gold-clean': '#d4af37'
+    }[document.getElementById('form-theme-preset').value];
+    if (presetAccent) {
+      document.getElementById('form-accent').value = presetAccent;
+      document.getElementById('form-accent-picker').value = presetAccent;
+    }
+    updateDataFromForm();
+    syncPreview();
+  });
+
+  document.getElementById('form-icon-pack').addEventListener('change', () => {
+    updateDataFromForm();
+    syncPreview();
+  });
+
   document.getElementById('form-tier').addEventListener('change', (e) => {
     applyTierVisibility(e.target.value);
     updateDataFromForm();
@@ -1126,6 +1145,10 @@ function populateForm(data) {
   const previewUrl = `/t/${data.template}/index.html`;
   if (previewIframe.getAttribute('src') !== previewUrl) previewIframe.src = previewUrl;
   document.getElementById('form-mode').value = data.profile_mode || 'standard';
+  document.getElementById('form-theme-preset').value = data.design?.themePreset || '';
+  document.getElementById('form-icon-pack').value = ['classic', 'bold'].includes(data.design?.iconPack)
+    ? data.design.iconPack
+    : 'classic';
   document.getElementById('form-redirect-url').value = data.redirect_url || '';
   applyTierVisibility(document.getElementById('form-tier').value);
 
@@ -1212,6 +1235,8 @@ function updateDataFromForm() {
 
   const tier = document.getElementById('form-tier').value;
   const redirectLink = links[0]?.value || '';
+  const priorDesign = activeProfileData?.design || {};
+  const selectedPreset = document.getElementById('form-theme-preset').value;
   activeProfileData = {
     schema: 1,
     template: tier === 'full' ? document.getElementById('form-template').value : 'clean-white',
@@ -1232,6 +1257,11 @@ function updateDataFromForm() {
     theme: {
       mode: document.getElementById('form-template').value.includes('dark') || document.getElementById('form-template').value.includes('gold') ? 'dark' : 'light',
       accent: document.getElementById('form-accent').value.trim() || null
+    },
+    design: {
+      ...priorDesign,
+      themePreset: selectedPreset || undefined,
+      iconPack: document.getElementById('form-icon-pack').value || 'classic'
     },
     links
   };
