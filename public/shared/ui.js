@@ -2,6 +2,7 @@
 // DOM helpers, 3D flip card, Initials avatar, and sharing
 
 import { ICONS } from './links.js';
+import { applyProfileDesign } from './design.js';
 
 /**
  * Generates an SVG Data URI initials avatar on accent background
@@ -24,6 +25,10 @@ export function generateInitialsAvatar(name = '', accent = '#4f8daa') {
  * Initializes the 3D flip card mechanics
  */
 export function setupProfileFlip() {
+  // Renderers call this after populating the profile; the data object is
+  // available both on server-injected pages and the admin's live preview.
+  applyProfileDesign(window.__LINKR_PROFILE__);
+
   const inner = document.getElementById('profile-inner');
   const buttons = document.querySelectorAll('.qr-toggle');
   const front = document.querySelector('.profile-front');

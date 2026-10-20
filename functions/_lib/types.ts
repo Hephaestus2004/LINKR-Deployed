@@ -37,7 +37,7 @@ export type ProfileSectionId = typeof PROFILE_SECTION_IDS[number];
 export const PROFILE_THEME_PRESET_IDS = ['monochrome-photo', 'gold-glass', 'gold-clean'] as const;
 export type ProfileThemePresetId = typeof PROFILE_THEME_PRESET_IDS[number];
 
-export const PROFILE_ICON_PACK_IDS = ['classic'] as const;
+export const PROFILE_ICON_PACK_IDS = ['classic', 'bold'] as const;
 export type ProfileIconPackId = typeof PROFILE_ICON_PACK_IDS[number];
 
 /** Safe design choices only; this never contains client-authored markup or code. */
