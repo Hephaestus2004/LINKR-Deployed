@@ -8,6 +8,8 @@ import { setupProfileFlip, shareProfile, applyTheme, generateInitialsAvatar } fr
 export function renderProfile(profile) {
   if (!profile) return;
 
+  document.body.classList.toggle('doidep', profile.company?.trim().toLowerCase() === 'doidep cafe and restaurant');
+
   const show = profile.show || {};
   const isLogoOnly = profile.profile_mode === 'logo_only';
   const hasCompanyLogo = Boolean(profile.company_logo) && !/(?:^|\/)assets\/company-logo\.svg(?:[?#].*)?$/.test(profile.company_logo);
@@ -25,6 +27,7 @@ export function renderProfile(profile) {
   const front = document.querySelector('.profile-front');
   if (front) {
     front.classList.toggle('logo-only', isLogoOnly);
+    front.classList.toggle('large-logo', Boolean(show.large_logo));
   }
 
   // Identity elements
@@ -53,7 +56,11 @@ export function renderProfile(profile) {
   const locEl = document.getElementById('location');
   if (locEl) {
     if (!isLogoOnly && profile.location) {
-      locEl.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.location}</svg><span>${profile.location}</span>`;
+      const icon = document.createElement('span');
+      icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.location}</svg>`;
+      const label = document.createElement('span');
+      label.textContent = profile.location;
+      locEl.replaceChildren(icon, label);
       locEl.hidden = false;
     } else {
       locEl.hidden = true;
@@ -236,7 +243,18 @@ export function renderProfile(profile) {
   // Save contact button
   const saveBtn = document.getElementById('save');
   const fallbackBtn = document.getElementById('vcf-fallback');
-  setupSaveContact(saveBtn, fallbackBtn, profile);
+  const visitBtn = document.getElementById('visit-us');
+  if (profile.primary_action_url && visitBtn) {
+    if (saveBtn) saveBtn.hidden = true;
+    if (fallbackBtn) fallbackBtn.hidden = true;
+    visitBtn.href = profile.primary_action_url;
+    visitBtn.setAttribute('aria-label', profile.primary_action_label || 'Visit us');
+    visitBtn.querySelector('span').textContent = profile.primary_action_label || 'Visit us';
+    visitBtn.hidden = false;
+  } else {
+    if (visitBtn) visitBtn.hidden = true;
+    setupSaveContact(saveBtn, fallbackBtn, profile);
+  }
 
   // Setup QR Flip
   setupProfileFlip();

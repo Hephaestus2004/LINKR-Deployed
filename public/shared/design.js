@@ -245,10 +245,10 @@ export function applyProfileDesign(profile, templateDefaults = {}) {
       packStyle.id = ICON_PACK_STYLE_ID;
       document.head.appendChild(packStyle);
     }
-    packStyle.textContent = `html[data-icon-pack="bold"] .qr-toggle svg,
+    packStyle.textContent = `html[data-icon-pack="bold"] .profile svg,
       html[data-icon-pack="bold"] .quick-actions svg,
-      html[data-icon-pack="bold"] .links svg,
-      html[data-icon-pack="bold"] .save svg,
+      html[data-icon-pack="bold"] #save svg,
+      html[data-icon-pack="bold"] #links svg,
       html[data-icon-pack="bold"] .copy-link svg { stroke-width: 2.6; }`;
   } else if (packStyle) {
     packStyle.remove();

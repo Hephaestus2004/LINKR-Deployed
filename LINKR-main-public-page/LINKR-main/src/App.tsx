@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 // Change this one value to point every order button somewhere else.
-const ORDER_URL = 'https://m.me/linkr.ph'
+const ORDER_URL = 'https://linkr-founder.vercel.app/'
 
 const NAV = [
   { label: 'Product', href: '#product' },

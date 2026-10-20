@@ -45,7 +45,11 @@ export function renderProfile(profile) {
   const locEl = document.getElementById('location');
   if (locEl) {
     if (!isLogoOnly && profile.location) {
-      locEl.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.location}</svg><span>${profile.location}</span>`;
+      const icon = document.createElement('span');
+      icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.location}</svg>`;
+      const label = document.createElement('span');
+      label.textContent = profile.location;
+      locEl.replaceChildren(icon, label);
       locEl.hidden = false;
     } else {
       locEl.hidden = true;
