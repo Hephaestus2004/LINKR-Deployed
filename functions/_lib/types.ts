@@ -31,6 +31,22 @@ export interface ProfileShowFlags {
   large_logo?: boolean;
 }
 
+export const PROFILE_SECTION_IDS = ['identity', 'links', 'share', 'qr'] as const;
+export type ProfileSectionId = typeof PROFILE_SECTION_IDS[number];
+
+export const PROFILE_THEME_PRESET_IDS = ['monochrome-photo', 'gold-glass', 'gold-clean'] as const;
+export type ProfileThemePresetId = typeof PROFILE_THEME_PRESET_IDS[number];
+
+export const PROFILE_ICON_PACK_IDS = ['classic'] as const;
+export type ProfileIconPackId = typeof PROFILE_ICON_PACK_IDS[number];
+
+/** Safe design choices only; this never contains client-authored markup or code. */
+export interface ProfileDesign {
+  sections?: ProfileSectionId[];
+  themePreset?: ProfileThemePresetId;
+  iconPack?: ProfileIconPackId;
+}
+
 export interface ProfileData {
   schema: number;
   template: string;
@@ -49,6 +65,7 @@ export interface ProfileData {
   vcard?: string | null;
   show?: ProfileShowFlags;
   theme?: ProfileTheme;
+  design?: ProfileDesign;
   links?: LinkItem[];
   redirect_url?: string | null;
   retailer?: string;

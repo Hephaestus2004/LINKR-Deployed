@@ -1,7 +1,12 @@
 // functions/_lib/validate.ts
 // Profile validation rules adhering strictly to 03_DATA_SCHEMA.md Section 7
 
-import { ProfileData } from './types';
+import {
+  PROFILE_ICON_PACK_IDS,
+  PROFILE_SECTION_IDS,
+  PROFILE_THEME_PRESET_IDS,
+  ProfileData
+} from './types';
 
 const ALLOWED_SCHEMES = ['http:', 'https:', 'tel:', 'mailto:', 'viber:', 'sms:'];
 
@@ -14,6 +19,37 @@ export interface ValidationResult {
 export function validateProfile(profile: ProfileData, tier: string = 'full'): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+
+  // Design fields are optional so profiles created before customization keep
+  // their existing template defaults. When present, accept only safe IDs.
+  if (profile.design !== undefined) {
+    const design = profile.design as unknown;
+    if (!design || typeof design !== 'object' || Array.isArray(design)) {
+      errors.push('Design settings must be an object.');
+    } else {
+      const choices = design as Record<string, unknown>;
+      if (choices.sections !== undefined) {
+        if (!Array.isArray(choices.sections) || choices.sections.length < 1 || choices.sections.length > PROFILE_SECTION_IDS.length) {
+          errors.push('Design sections must contain between 1 and 4 sections.');
+        } else {
+          const sections = choices.sections;
+          if (sections.some(section => typeof section !== 'string' || !PROFILE_SECTION_IDS.includes(section as typeof PROFILE_SECTION_IDS[number]))) {
+            errors.push('Design contains an unsupported section.');
+          } else if (new Set(sections).size !== sections.length) {
+            errors.push('Design sections cannot be repeated.');
+          }
+        }
+      }
+      if (choices.themePreset !== undefined &&
+        (typeof choices.themePreset !== 'string' || !PROFILE_THEME_PRESET_IDS.includes(choices.themePreset as typeof PROFILE_THEME_PRESET_IDS[number]))) {
+        errors.push('Design contains an unsupported theme preset.');
+      }
+      if (choices.iconPack !== undefined &&
+        (typeof choices.iconPack !== 'string' || !PROFILE_ICON_PACK_IDS.includes(choices.iconPack as typeof PROFILE_ICON_PACK_IDS[number]))) {
+        errors.push('Design contains an unsupported icon pack.');
+      }
+    }
+  }
 
   if (tier === 'direct' || tier === 'redirect') {
     if (!profile.name?.trim()) errors.push('Client name is required.');
