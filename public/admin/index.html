@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@1,400&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="/assets/contact-favicon.svg">
-  <link rel="stylesheet" href="/admin/style.css?v=20261021-profile-sections">
+  <link rel="stylesheet" href="/admin/style.css?v=20261021-client-requests">
 </head>
 <body>
   <div class="admin-app">
@@ -25,6 +25,7 @@
         </button>
         <button class="nav-item" data-tab="resellers">Resellers</button>
         <button class="nav-item" data-tab="tasks">To Do & Alerts</button>
+        <button class="nav-item" data-tab="client-requests">Client Requests</button>
         <button class="nav-item" data-tab="analytics">
           <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/></svg>
           Analytics
@@ -137,6 +138,19 @@
             <div class="header-actions"><button class="btn btn-primary" type="submit">Save task</button><button class="btn btn-secondary" id="btn-cancel-task" type="button" hidden>Cancel edit</button></div>
           </form></article>
           <article class="form-card"><div class="card-header-flex"><div><h3>Task list</h3><p class="subtitle">Edit, complete, or delete tasks manually.</p></div><select id="task-filter" class="select" aria-label="Filter tasks"><option value="all">All tasks</option><option value="near">Near deadline</option><option value="overdue">Overdue</option><option value="system">System</option><option value="printing">Printing</option><option value="add_client">Add client</option></select></div><div id="task-list" class="task-list"><p class="analytics-loading">Loading tasks...</p></div></article>
+        </div>
+      </section>
+
+      <section id="tab-client-requests" class="tab-pane">
+        <header class="section-header">
+          <div><h1>Client Requests</h1><p class="subtitle">Create private invitations, review the submitted design, then approve or publish the reviewed snapshot.</p></div>
+          <div class="header-actions"><button id="btn-create-client-invite" class="btn btn-primary">Create invite link</button><button id="btn-refresh-client-requests" class="btn btn-secondary">Refresh</button></div>
+        </header>
+        <div id="client-invite-result" class="analytics-period" hidden></div>
+        <div id="client-requests-error" class="analytics-error" hidden></div>
+        <div class="client-request-grid">
+          <article class="form-card"><h3>Requests</h3><div id="client-request-list" class="task-list"><p class="analytics-loading">Open this tab to load requests.</p></div></article>
+          <article class="form-card"><h3>Reviewed profile snapshot</h3><div id="client-request-detail" class="client-request-detail"><p class="subtitle">Select a request to inspect its submitted fields and safe design settings.</p></div></article>
         </div>
       </section>
 
@@ -476,6 +490,6 @@
   </div>
 
   <script src="/shared/qrcode.min.js"></script>
-  <script type="module" src="/admin/app.js?v=20261021-profile-sections"></script>
+  <script type="module" src="/admin/app.js?v=20261021-client-requests"></script>
 </body>
 </html>

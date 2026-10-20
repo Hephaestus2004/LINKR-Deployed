@@ -7,6 +7,7 @@ ENVIRONMENT = "production"
 BASE_URL = "https://linkr-tap.site"
 DEFAULT_TEMPLATE = "clean-white"
 DOMAIN = "linkr-tap.site"
+CLIENT_PORTAL_URL = "https://edit-my-profile.linkr-tap.site"
 
 # D1 Database binding
 [[d1_databases]]

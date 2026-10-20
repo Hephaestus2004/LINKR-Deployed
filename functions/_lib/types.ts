@@ -99,4 +99,6 @@ export interface Env {
   DOMAIN?: string;
   DEFAULT_TEMPLATE?: string;
   SCAN_ANALYTICS?: any;
+  CLIENT_PORTAL_URL?: string;
+  CLIENT_PORTAL_API_TOKEN?: string;
 }

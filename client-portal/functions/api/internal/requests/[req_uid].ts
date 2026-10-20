@@ -1,4 +1,4 @@
-import { PortalEnv, jsonResponse, readJson, requireInternalToken, sha256 } from '../../../_lib/portal';
+import { PortalEnv, deleteRequestAssets, jsonResponse, readJson, requireInternalToken, sha256 } from '../../../_lib/portal';
 
 function validId(value: string): boolean {
   return /^req-[A-Z0-9]{10}$/.test(value);
@@ -42,10 +42,20 @@ export const onRequestPost: PagesFunction<PortalEnv> = async ({ params, request,
   try {
     const body = await readJson(request, 4096);
     const action = body.action;
-    if (action !== 'approve' && action !== 'reject') return jsonResponse({ error: 'Action must be approve or reject.' }, 422);
+    if (!['approve', 'reject', 'published'].includes(String(action))) return jsonResponse({ error: 'Action must be approve, reject, or published.' }, 422);
     const row = await env.PORTAL_DB.prepare('SELECT status, data FROM portal_requests WHERE req_uid = ? LIMIT 1')
       .bind(reqUid).first<{ status: string; data: string }>();
     if (!row) return jsonResponse({ error: 'Request not found.' }, 404);
+    if (action === 'published') {
+      const published = await env.PORTAL_DB.prepare(`
+        UPDATE portal_requests SET status = 'published', data = '{}', published_at = datetime('now'), updated_at = datetime('now')
+        WHERE req_uid = ? AND status = 'approved'
+      `).bind(reqUid).run();
+      if (!published.meta.changes) return jsonResponse({ error: 'Only approved requests can be marked published.' }, 409);
+      const invite = await env.PORTAL_DB.prepare('SELECT invite_id FROM portal_requests WHERE req_uid = ?').bind(reqUid).first<{ invite_id: string }>();
+      if (invite) await deleteRequestAssets(env, invite.invite_id);
+      return jsonResponse({ req_uid: reqUid, status: 'published' });
+    }
     if (row.status !== 'pending') return jsonResponse({ error: 'Only pending requests can be reviewed.' }, 409);
 
     if (action === 'reject') {

@@ -118,6 +118,12 @@ export async function storeRequestImage(
   if (!env.PORTAL_UPLOADS) throw new Error('Client upload storage is not configured.');
 
   const mime = match[1].toLowerCase();
+  const signature = [...bytes.subarray(0, 12)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  const validImage = mime === 'image/png' ? signature.startsWith('89504e470d0a1a0a')
+    : mime === 'image/jpeg' ? signature.startsWith('ffd8ff')
+      : mime === 'image/webp' ? signature.startsWith('52494646') && signature.slice(16, 24) === '57454250'
+        : false;
+  if (!validImage) throw new Error(`${field} image data does not match its declared format.`);
   const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice('image/'.length);
   const prefix = field === 'photo' ? 'photos' : field === 'company_logo' ? 'logos' : 'backgrounds';
   const key = `requests/${inviteId}/${prefix}/${crypto.randomUUID()}.${ext}`;

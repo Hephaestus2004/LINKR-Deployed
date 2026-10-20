@@ -204,6 +204,7 @@ function setupTabs() {
       if (target === 'analytics') loadAnalytics();
       if (target === 'resellers') loadResellers();
       if (target === 'tasks') loadTasks();
+      if (target === 'client-requests') loadClientRequests();
     });
   });
 }
@@ -805,6 +806,8 @@ function setupResellersAndTasks() {
   document.getElementById('task-filter').addEventListener('change', renderAdminTasks);
   document.getElementById('btn-refresh-resellers').addEventListener('click', loadResellers);
   document.getElementById('btn-refresh-tasks').addEventListener('click', loadTasks);
+  document.getElementById('btn-refresh-client-requests').addEventListener('click', loadClientRequests);
+  document.getElementById('btn-create-client-invite').addEventListener('click', createClientInvite);
   document.getElementById('btn-cancel-reseller').addEventListener('click', resetResellerForm);
   document.getElementById('btn-cancel-task').addEventListener('click', resetAdminTaskForm);
   document.getElementById('reseller-form').addEventListener('submit', async event => {
@@ -822,6 +825,134 @@ function setupResellersAndTasks() {
     catch (error) { alert(`Could not save task: ${error.message}`); }
   });
   setAdminTaskFields();
+}
+
+let clientRequests = [];
+let selectedClientRequest = '';
+
+function setClientRequestError(message = '') {
+  const node = document.getElementById('client-requests-error');
+  node.textContent = message;
+  node.hidden = !message;
+}
+
+async function loadClientRequests() {
+  const list = document.getElementById('client-request-list');
+  setClientRequestError('');
+  list.replaceChildren(Object.assign(document.createElement('p'), { className: 'analytics-loading', textContent: 'Loading requests…' }));
+  try {
+    const response = await fetch('/admin/api/admin/client-requests', { cache: 'no-store' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not load client requests.');
+    clientRequests = result.requests || [];
+    list.replaceChildren();
+    if (!clientRequests.length) list.append(Object.assign(document.createElement('p'), { className: 'subtitle', textContent: 'No client requests yet.' }));
+    clientRequests.forEach(request => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `client-request-row${request.req_uid === selectedClientRequest ? ' is-selected' : ''}`;
+      const name = document.createElement('strong'); name.textContent = request.name || 'Unnamed profile';
+      const meta = document.createElement('small'); meta.textContent = `${request.req_uid} · ${request.status} · ${request.created_at}`;
+      button.append(name, meta);
+      button.addEventListener('click', () => openClientRequest(request.req_uid));
+      list.append(button);
+    });
+  } catch (error) { list.replaceChildren(); setClientRequestError(error.message); }
+}
+
+async function createClientInvite() {
+  setClientRequestError('');
+  const button = document.getElementById('btn-create-client-invite');
+  button.disabled = true;
+  try {
+    const response = await fetch('/admin/api/admin/client-requests', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'invite' })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not create invitation.');
+    const resultNode = document.getElementById('client-invite-result');
+    resultNode.replaceChildren();
+    const link = document.createElement('a'); link.href = result.invite_url; link.textContent = result.invite_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    resultNode.append(document.createTextNode('Private invite link (expires in 7 days): '), link);
+    resultNode.hidden = false;
+  } catch (error) { setClientRequestError(error.message); }
+  finally { button.disabled = false; }
+}
+
+async function openClientRequest(reqUid) {
+  selectedClientRequest = reqUid;
+  const detailNode = document.getElementById('client-request-detail');
+  detailNode.replaceChildren(Object.assign(document.createElement('p'), { className: 'analytics-loading', textContent: 'Loading approved data…' }));
+  try {
+    const response = await fetch(`/admin/api/admin/client-requests?req_uid=${encodeURIComponent(reqUid)}`, { cache: 'no-store' });
+    const detail = await response.json();
+    if (!response.ok) throw new Error(detail.error || 'Could not load request.');
+    renderClientRequestDetail(detail);
+    loadClientRequests();
+  } catch (error) { detailNode.replaceChildren(); setClientRequestError(error.message); }
+}
+
+function renderClientRequestDetail(detail) {
+  const root = document.getElementById('client-request-detail');
+  root.replaceChildren();
+  const profile = detail.approved_snapshot || detail.data;
+  if (!profile || typeof profile !== 'object') { root.textContent = 'Request data has expired.'; return; }
+  const heading = document.createElement('h2'); heading.textContent = profile.name || 'Unnamed profile'; root.append(heading);
+  const fields = [
+    ['Request', detail.req_uid], ['Status', detail.status], ['Company', profile.company], ['Job title', profile.title],
+    ['Bio', profile.bio], ['Location', profile.location], ['Template', profile.template], ['Theme', profile.design?.themePreset],
+    ['Icon pack', profile.design?.iconPack], ['Sections', Array.isArray(profile.design?.sections) ? profile.design.sections.join(' → ') : '']
+  ];
+  fields.forEach(([label, value]) => {
+    if (!value) return;
+    const row = document.createElement('p');
+    const strong = document.createElement('strong'); strong.textContent = `${label}: `;
+    row.append(strong, document.createTextNode(String(value))); root.append(row);
+  });
+  const imageFields = [['photo', 'Profile photo'], ['company_logo', 'Logo'], ['background_image', 'Background image']];
+  imageFields.forEach(async ([key, label]) => {
+    const reference = profile[key];
+    if (!reference?.startsWith('r2:')) return;
+    try {
+      const response = await fetch(`/admin/api/admin/client-requests?req_uid=${encodeURIComponent(detail.req_uid)}&asset=${encodeURIComponent(reference.slice(3))}`, { cache: 'no-store' });
+      const asset = await response.json();
+      if (!response.ok || !/^image\/(webp|png|jpeg)$/.test(asset.mime)) return;
+      const wrapper = document.createElement('div'); wrapper.className = 'client-request-image';
+      const title = document.createElement('small'); title.textContent = label;
+      const image = document.createElement('img'); image.alt = label; image.src = `data:${asset.mime};base64,${asset.base64}`;
+      wrapper.append(title, image); root.append(wrapper);
+    } catch { /* Image preview is optional; the request data remains available for review. */ }
+  });
+  const linksTitle = document.createElement('h3'); linksTitle.textContent = 'Links'; root.append(linksTitle);
+  (Array.isArray(profile.links) ? profile.links : []).forEach(item => {
+    const row = document.createElement('p'); row.textContent = `${item.label || item.type}: ${item.value}`; root.append(row);
+  });
+  const note = document.createElement('p'); note.className = 'subtitle';
+  note.textContent = 'Approval freezes this submitted data. Publishing revalidates that exact snapshot before creating the production profile.'; root.append(note);
+  const actions = document.createElement('div'); actions.className = 'header-actions client-request-actions';
+  const addAction = (label, action, className) => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = className; button.textContent = label;
+    button.addEventListener('click', async () => {
+      button.disabled = true; setClientRequestError('');
+      try {
+        const response = await fetch('/admin/api/admin/client-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, req_uid: detail.req_uid }) });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Request action failed.');
+        if (result.url) {
+          root.replaceChildren();
+          const success = document.createElement('p'); success.textContent = 'Profile published from the approved snapshot.';
+          const link = document.createElement('a'); link.href = result.url; link.textContent = `Open profile: ${result.url}`; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          root.append(success, link);
+          await loadClientRequests();
+        } else await openClientRequest(detail.req_uid);
+      } catch (error) { setClientRequestError(error.message); button.disabled = false; }
+    });
+    actions.append(button);
+  };
+  if (detail.status === 'pending') {
+    addAction('Approve snapshot', 'approve', 'btn btn-primary');
+    addAction('Reject', 'reject', 'btn btn-secondary');
+  } else if (detail.status === 'approved') addAction('Publish approved snapshot', 'publish', 'btn btn-primary');
+  root.append(actions);
 }
 
 window.editReseller = id => {

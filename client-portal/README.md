@@ -13,6 +13,8 @@ Configure these on the `linkr-client-editor` Pages project, separately for previ
 
 Apply [0001_portal.sql](./migrations/0001_portal.sql) to the portal database before using the app. Do not bind the production `linkr-db` or `linkr-assets` resources here.
 
+The main project also needs the `CLIENT_PORTAL_API_TOKEN` secret, set to the same independently generated value as the portal's `PORTAL_API_TOKEN`. Set `CLIENT_PORTAL_URL` to this exact hostname in the main Pages environment. Apply `migrations/0006_client_request_publications.sql` to the production main D1 database before enabling the admin's Publish action. Both hostnames must be protected by Cloudflare Access for admin routes; the client portal remains separate and only invitation sessions can submit/view their own request.
+
 The private invitation endpoint creates seven-day links at `/api/internal/invites`. Only the server holding `PORTAL_API_TOKEN` can create invitations or review requests. Client invitation tokens are stored as SHA-256 hashes, exchanged for a host-only `HttpOnly; Secure; SameSite=Strict` session cookie, then removed from the browser URL by redirecting to `/`.
 
 ## Local development
