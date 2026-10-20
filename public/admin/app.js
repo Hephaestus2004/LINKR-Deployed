@@ -361,6 +361,30 @@ async function loadImage(src) {
   await image.decode();
   return image;
 }
+async function invertPngColors(data) {
+  const isDataUrl = typeof data === 'string';
+  const src = isDataUrl ? data : URL.createObjectURL(new Blob([data], { type: 'image/png' }));
+  try {
+    const image = await loadImage(src);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('This browser could not create the inverted QR artwork.');
+    ctx.drawImage(image, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      pixels.data[index] = 255 - pixels.data[index];
+      pixels.data[index + 1] = 255 - pixels.data[index + 1];
+      pixels.data[index + 2] = 255 - pixels.data[index + 2];
+    }
+    ctx.putImageData(pixels, 0, 0);
+    const blob = await canvasToBlob(canvas);
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    if (!isDataUrl) URL.revokeObjectURL(src);
+  }
+}
 
 async function exportMergedQrSheet() {
   const selectedIds = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
@@ -454,7 +478,9 @@ async function exportSelectedTransparentQrs() {
       const dataUrl = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, 'transparent');
       const image = await fetch(dataUrl).then((response) => response.arrayBuffer());
       files.push({ name: `${id}-qr-transparent.png`, data: new Uint8Array(image) });
+      files.push({ name: `${id}-qr-transparent (black).png`, data: await invertPngColors(dataUrl) });
       files.push({ name: `${id}-userid.png`, data: await generateUserIdPng(id) });
+      files.push({ name: `${id}-userid (black).png`, data: await invertPngColors(await generateUserIdPng(id)) });
     }
     const zip = createZip(files);
     const url = URL.createObjectURL(zip);
