@@ -483,6 +483,27 @@ async function invertPngColors(dataUrl, fillWhiteBackground = false) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+async function makeTransparentQrInk(dataUrl, invertInk = false) {
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('This browser could not prepare the QR artwork.');
+  ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const luminance = Math.round(pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114);
+    const inkAlpha = Math.round(pixels.data[index + 3] * (255 - luminance) / 255);
+    pixels.data[index] = invertInk ? 255 : 0;
+    pixels.data[index + 1] = invertInk ? 255 : 0;
+    pixels.data[index + 2] = invertInk ? 255 : 0;
+    pixels.data[index + 3] = inkAlpha;
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return loadImage(canvas.toDataURL('image/png'));
+}
+
 async function exportMergedQrSheet() {
   const selectedIds = [...document.querySelectorAll('.profile-select:checked')].map((checkbox) => checkbox.dataset.id);
   if (!selectedIds.length) return;
@@ -516,26 +537,39 @@ async function exportMergedQrSheet() {
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('This browser could not create the merged PNG canvas.');
       ctx.imageSmoothingEnabled = false;
+      const blackCanvas = document.createElement('canvas');
+      blackCanvas.width = canvas.width;
+      blackCanvas.height = canvas.height;
+      const blackCtx = blackCanvas.getContext('2d');
+      if (!blackCtx) throw new Error('This browser could not create the black QR sheet.');
+      blackCtx.imageSmoothingEnabled = false;
       for (let index = 0; index < pageProfiles.length; index++) {
         const id = pageProfiles[index].id;
         button.textContent = `Building sheet ${page + 1}/${pageCount} (${index + 1}/${pageProfiles.length})...`;
         const qrData = await generateStyledQr(`${QR_PROFILE_BASE_URL}${id}`, id);
-        const qrImage = await loadImage(qrData);
+        const qrImage = await makeTransparentQrInk(qrData);
+        const invertedQrImage = await makeTransparentQrInk(qrData, true);
         const column = index % columns;
         const row = Math.floor(index / columns);
         const cellX = margin + column * (cellWidth + gap);
         const cellY = margin + row * (cellHeight + gap);
-        ctx.drawImage(qrImage, cellX + (cellWidth - qrSize) / 2, cellY + (cellHeight - qrSize) / 2, qrSize, qrSize);
+        const tileX = cellX + (cellWidth - qrSize) / 2;
+        const tileY = cellY + (cellHeight - qrSize) / 2;
+        // Each tile owns its solid frame. The unused cell and page margins remain transparent for cutting.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(tileX, tileY, qrSize, qrSize);
+        ctx.drawImage(qrImage, tileX, tileY, qrSize, qrSize);
+        blackCtx.fillStyle = '#000000';
+        blackCtx.fillRect(tileX, tileY, qrSize, qrSize);
+        blackCtx.drawImage(invertedQrImage, tileX, tileY, qrSize, qrSize);
       }
 
       const blob = await canvasToBlob(canvas);
       const data = await blob.arrayBuffer();
       const sheetNumber = String(page + 1).padStart(2, '0');
       files.push({ name: `linkr-qr-sheet-${sheetNumber}.png`, data: new Uint8Array(data) });
-      files.push({
-        name: `linkr-qr-sheet-${sheetNumber} (black).png`,
-        data: await invertPngColors(new Uint8Array(data), true),
-      });
+      const blackBlob = await canvasToBlob(blackCanvas);
+      files.push({ name: `linkr-qr-sheet-${sheetNumber} (black).png`, data: new Uint8Array(await blackBlob.arrayBuffer()) });
     }
 
     const blob = createZip(files);
@@ -645,6 +679,11 @@ async function deleteSelectedProfiles() {
 let adminResellers = [];
 let adminTasks = [];
 
+function resellerOptionLabel(reseller) {
+  const id = reseller.code ? `${reseller.code} · ` : `ID ${reseller.id} · `;
+  return `${id}${reseller.name}`;
+}
+
 async function loadResellers() {
   try {
     const response = await fetch('/admin/api/admin/resellers');
@@ -655,8 +694,8 @@ async function loadResellers() {
     const taskSelect = document.getElementById('task-reseller');
     const selectedEditor = editorSelect.value;
     const selectedTask = taskSelect.value;
-    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
-    taskSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(resellerOptionLabel(r))}</option>`).join('');
+    taskSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(resellerOptionLabel(r))}</option>`).join('');
     editorSelect.value = selectedEditor;
     taskSelect.value = selectedTask;
     document.getElementById('reseller-list').innerHTML = adminResellers.length ? adminResellers.map(r => `
@@ -676,11 +715,11 @@ async function loadTasks() {
     if (!adminResellers.length) adminResellers = data.resellers || [];
     const editorSelect = document.getElementById('form-reseller-id');
     const editorValue = editorSelect.value;
-    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    editorSelect.innerHTML = '<option value="">No reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(resellerOptionLabel(r))}</option>`).join('');
     editorSelect.value = editorValue;
     const resellerSelect = document.getElementById('task-reseller');
     const resellerValue = resellerSelect.value;
-    resellerSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+    resellerSelect.innerHTML = '<option value="">Select reseller</option>' + adminResellers.map(r => `<option value="${r.id}">${escapeHtml(resellerOptionLabel(r))}</option>`).join('');
     resellerSelect.value = resellerValue;
     const clientSelect = document.getElementById('task-clients');
     const prior = new Set([...clientSelect.selectedOptions].map(option => option.value));

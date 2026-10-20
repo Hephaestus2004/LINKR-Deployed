@@ -16,7 +16,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     const [tasks, resellers, clients] = await Promise.all([
       env.DB.prepare(`SELECT t.*, r.name AS reseller_name FROM admin_tasks t
         LEFT JOIN retailers r ON r.id = t.reseller_id ORDER BY t.completed ASC, t.deadline ASC, t.id DESC`).all(),
-      env.DB.prepare('SELECT id, name FROM retailers WHERE active = 1 ORDER BY name COLLATE NOCASE').all(),
+      env.DB.prepare('SELECT id, code, name FROM retailers WHERE active = 1 ORDER BY name COLLATE NOCASE').all(),
       env.DB.prepare(`SELECT id, COALESCE(json_extract(data, '$.name'), id) AS name
         FROM profiles WHERE status != 'deleted' AND COALESCE(json_extract(data, '$.deleted'), 0) = 0
         AND COALESCE(json_extract(data, '$.name'), '') != '' ORDER BY name COLLATE NOCASE LIMIT 500`).all(),
