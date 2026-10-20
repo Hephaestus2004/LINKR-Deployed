@@ -66,6 +66,33 @@ export function applyProfileDesign(profile, templateDefaults = {}) {
   }
 
   const root = document.documentElement;
+  const backgroundImage = typeof profile?.background_image === 'string' ? profile.background_image : '';
+  let safeBackgroundUrl = '';
+  const mediaPath = /^\/media\/backgrounds\/[a-z0-9_-]+\.(?:webp|png|jpg)$/i;
+  const uploadDataUrl = /^data:image\/(?:webp|png|jpeg);base64,[a-z0-9+/]+=*$/i;
+  try {
+    if (uploadDataUrl.test(backgroundImage) && backgroundImage.length <= 700 * 1024) {
+      safeBackgroundUrl = backgroundImage;
+    } else {
+      const candidate = new URL(backgroundImage, window.location.origin);
+      if (candidate.origin === window.location.origin && !candidate.search && !candidate.hash && mediaPath.test(candidate.pathname)) {
+        safeBackgroundUrl = `${candidate.origin}${candidate.pathname}`;
+      }
+    }
+  } catch {}
+  document.body.style.backgroundImage = safeBackgroundUrl
+    ? `linear-gradient(rgba(0, 0, 0, .38), rgba(0, 0, 0, .38)), url("${safeBackgroundUrl}")`
+    : '';
+  if (safeBackgroundUrl) {
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+  } else {
+    document.body.style.removeProperty('background-size');
+    document.body.style.removeProperty('background-position');
+    document.body.style.removeProperty('background-attachment');
+  }
+
   const iconPack = ICON_PACK_IDS.has(design.iconPack) ? design.iconPack : 'classic';
   root.dataset.iconPack = iconPack;
   let packStyle = document.getElementById(ICON_PACK_STYLE_ID);

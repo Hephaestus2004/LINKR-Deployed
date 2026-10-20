@@ -966,6 +966,7 @@ function setupEditor() {
   // Image Upload Handlers with Canvas Optimizer
   setupImageUploader('photo-file-input', 'form-photo', 'photo-preview-thumb', 360, 360);
   setupImageUploader('logo-file-input', 'form-logo', 'logo-preview-thumb', 480, 160);
+  setupImageUploader('background-image-file-input', 'form-background-image', 'background-image-preview-thumb', 1600, 1600);
 
   document.getElementById('btn-remove-photo').addEventListener('click', () => {
     document.getElementById('form-photo').value = '';
@@ -982,6 +983,15 @@ function setupEditor() {
     syncPreview();
   });
 
+  document.getElementById('btn-remove-background-image').addEventListener('click', () => {
+    document.getElementById('form-background-image').value = '';
+    const image = document.getElementById('background-image-preview-thumb');
+    image.removeAttribute('src');
+    image.hidden = true;
+    updateDataFromForm();
+    syncPreview();
+  });
+
   document.getElementById('form-photo').addEventListener('input', (e) => {
     const val = e.target.value.trim();
     document.getElementById('photo-preview-thumb').src = val || '/assets/profile-photo.svg';
@@ -990,6 +1000,14 @@ function setupEditor() {
   document.getElementById('form-logo').addEventListener('input', (e) => {
     const val = e.target.value.trim();
     const image = document.getElementById('logo-preview-thumb');
+    image.hidden = !val;
+    if (val) image.src = val;
+    else image.removeAttribute('src');
+  });
+
+  document.getElementById('form-background-image').addEventListener('input', (e) => {
+    const val = e.target.value.trim();
+    const image = document.getElementById('background-image-preview-thumb');
     image.hidden = !val;
     if (val) image.src = val;
     else image.removeAttribute('src');
@@ -1137,6 +1155,12 @@ function populateForm(data) {
   logoImage.hidden = !logo;
   if (logo) logoImage.src = logo;
   else logoImage.removeAttribute('src');
+  const backgroundImage = data.background_image || '';
+  document.getElementById('form-background-image').value = backgroundImage;
+  const backgroundImagePreview = document.getElementById('background-image-preview-thumb');
+  backgroundImagePreview.hidden = !backgroundImage;
+  if (backgroundImage) backgroundImagePreview.src = backgroundImage;
+  else backgroundImagePreview.removeAttribute('src');
   data.qr_code = null;
 
   data.template = normalizeTemplate(data.template);
@@ -1253,6 +1277,7 @@ function updateDataFromForm() {
     location: tier === 'full' ? document.getElementById('form-location').value.trim() : null,
     photo: tier === 'full' ? (document.getElementById('form-photo').value.trim() || null) : null,
     company_logo: tier === 'full' ? (document.getElementById('form-logo').value.trim() || null) : null,
+    background_image: tier === 'full' ? (document.getElementById('form-background-image').value.trim() || null) : null,
     qr_code: activeProfileData.qr_code || null,
     theme: {
       mode: document.getElementById('form-template').value.includes('dark') || document.getElementById('form-template').value.includes('gold') ? 'dark' : 'light',

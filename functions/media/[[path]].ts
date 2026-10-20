@@ -1,7 +1,7 @@
 import { Env } from '../_lib/types';
 import { getNoCacheHeaders } from '../_lib/cache';
 
-const KEY_PATTERN = /^(photos|logos|qr)\/[a-z0-9_-]+\.(?:webp|png|jpg)$/i;
+const KEY_PATTERN = /^(photos|logos|backgrounds|qr)\/[a-z0-9_-]+\.(?:webp|png|jpg)$/i;
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
   const path = Array.isArray(params.path) ? params.path.join('/') : String(params.path || '');

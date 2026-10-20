@@ -59,6 +59,7 @@ export interface ProfileData {
   location?: string | null;
   photo?: string | null;
   company_logo?: string | null;
+  background_image?: string | null;
   qr_code?: string | null;
   primary_action_label?: string;
   primary_action_url?: string;

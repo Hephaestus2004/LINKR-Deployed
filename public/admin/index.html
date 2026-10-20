@@ -332,6 +332,23 @@
                     <input type="text" id="form-logo" class="input" placeholder="Or paste logo URL" style="margin-top: 6px; font-size: 0.8rem;">
                   </div>
                 </div>
+                <div class="form-row">
+                  <div class="form-group" data-full-tier>
+                    <label>Page Background Image (Optional)</label>
+                    <div class="image-upload-box">
+                      <img id="background-image-preview-thumb" alt="Background image preview" class="image-thumb" hidden>
+                      <div class="upload-controls">
+                        <label class="btn btn-sm btn-secondary file-btn">
+                          Choose Background
+                          <input type="file" id="background-image-file-input" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                        </label>
+                        <button type="button" id="btn-remove-background-image" class="btn btn-sm btn-danger">Clear</button>
+                      </div>
+                    </div>
+                    <input type="text" id="form-background-image" class="input" readonly placeholder="Upload a background image" style="margin-top: 6px; font-size: 0.8rem;">
+                    <small>Stored as a profile image asset. Maximum 500 KB after compression.</small>
+                  </div>
+                </div>
                 <div class="form-group qr-generator" data-qr-tier>
                   <label>Profile QR Code</label>
                   <p id="qr-preview-status" class="qr-preview-status">A single print-ready white square will combine the black QR and uppercase UID.</p>
@@ -445,6 +462,6 @@
   </div>
 
   <script src="/shared/qrcode.min.js"></script>
-  <script type="module" src="/admin/app.js?v=20261021-qr-image-decode"></script>
+  <script type="module" src="/admin/app.js?v=20261021-profile-background"></script>
 </body>
 </html>

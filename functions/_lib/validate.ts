@@ -51,6 +51,21 @@ export function validateProfile(profile: ProfileData, tier: string = 'full'): Va
     }
   }
 
+  if (profile.background_image !== undefined && profile.background_image !== null && profile.background_image !== '') {
+    if (typeof profile.background_image !== 'string') {
+      errors.push('Background image must be an uploaded WebP, PNG, or JPEG profile asset.');
+    } else {
+      const imageRef = profile.background_image.trim();
+      const allowedReference = /^(?:r2:backgrounds\/[a-z0-9_-]+\.(?:webp|png|jpg)|(?:https?:\/\/[^/]+)?\/media\/backgrounds\/[a-z0-9_-]+\.(?:webp|png|jpg))$/i;
+      const allowedUpload = /^data:image\/(?:webp|png|jpeg);base64,[a-z0-9+/]+=*$/i;
+      if (!allowedReference.test(imageRef) && !allowedUpload.test(imageRef)) {
+        errors.push('Background image must be an uploaded WebP, PNG, or JPEG profile asset.');
+      } else if (allowedUpload.test(imageRef) && imageRef.length > 700 * 1024) {
+        errors.push('Background image exceeds the 500 KB upload limit.');
+      }
+    }
+  }
+
   if (tier === 'direct' || tier === 'redirect') {
     if (!profile.name?.trim()) errors.push('Client name is required.');
     const links = Array.isArray(profile.links) ? profile.links : [];

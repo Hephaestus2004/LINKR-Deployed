@@ -376,7 +376,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     }
 
     if (env.R2_STORAGE) {
-      for (const prefix of [`photos/${id}-`, `logos/${id}-`, `qr/${id}-`, `qr/${id}.`]) {
+      for (const prefix of [`photos/${id}-`, `logos/${id}-`, `backgrounds/${id}-`, `qr/${id}-`, `qr/${id}.`]) {
         let cursor: string | undefined;
         do {
           const page = await env.R2_STORAGE.list({ prefix, cursor });

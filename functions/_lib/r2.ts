@@ -1,9 +1,9 @@
 import { Env, ProfileData } from './types';
 
 const IMAGE_TYPES: Record<string, { extension: string; maxBytes: number }> = {
-  'image/webp': { extension: 'webp', maxBytes: 300 * 1024 },
-  'image/png': { extension: 'png', maxBytes: 300 * 1024 },
-  'image/jpeg': { extension: 'jpg', maxBytes: 300 * 1024 }
+  'image/webp': { extension: 'webp', maxBytes: 500 * 1024 },
+  'image/png': { extension: 'png', maxBytes: 500 * 1024 },
+  'image/jpeg': { extension: 'jpg', maxBytes: 500 * 1024 }
 };
 
 export async function storeProfileImages(env: Env, id: string, source: ProfileData): Promise<ProfileData> {
@@ -11,6 +11,7 @@ export async function storeProfileImages(env: Env, id: string, source: ProfileDa
   const targets = [
     { field: 'photo' as const, prefix: 'photos', limit: 300 * 1024 },
     { field: 'company_logo' as const, prefix: 'logos', limit: 200 * 1024 },
+    { field: 'background_image' as const, prefix: 'backgrounds', limit: 500 * 1024 },
     { field: 'qr_code' as const, prefix: 'qr', limit: 500 * 1024 }
   ];
 
@@ -19,7 +20,7 @@ export async function storeProfileImages(env: Env, id: string, source: ProfileDa
     if (!value) continue;
 
     // Accept documented references and URLs returned by the media endpoint.
-    const existingKey = value.match(/^(?:r2:|(?:https?:\/\/[^/]+)?\/media\/)(photos|logos|qr)\/([a-z0-9_-]+\.(?:webp|png|jpg))$/i);
+    const existingKey = value.match(/^(?:r2:|(?:https?:\/\/[^/]+)?\/media\/)(photos|logos|backgrounds|qr)\/([a-z0-9_-]+\.(?:webp|png|jpg))$/i);
     if (existingKey) {
       profile[field] = `r2:${existingKey[1]}/${existingKey[2]}`;
       continue;
@@ -47,7 +48,7 @@ export async function storeProfileImages(env: Env, id: string, source: ProfileDa
 
 export function resolveProfileMedia(profile: ProfileData, origin: string): ProfileData {
   const resolved = { ...profile };
-  for (const field of ['photo', 'company_logo', 'qr_code'] as const) {
+  for (const field of ['photo', 'company_logo', 'background_image', 'qr_code'] as const) {
     const value = resolved[field];
     if (value?.startsWith('r2:')) {
       resolved[field] = `${origin}/media/${value.slice(3)}`;
