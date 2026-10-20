@@ -448,9 +448,22 @@ function canvasToBlob(canvas) {
 
 async function loadImage(src) {
   const image = new Image();
-  image.src = src;
-  await image.decode();
-  return image;
+  let imageSource = src;
+  let objectUrl = null;
+  if (src instanceof ArrayBuffer || ArrayBuffer.isView(src)) {
+    const bytes = src instanceof ArrayBuffer
+      ? src
+      : new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+    objectUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    imageSource = objectUrl;
+  }
+  try {
+    image.src = imageSource;
+    await image.decode();
+    return image;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 async function invertPngColors(dataUrl, fillWhiteBackground = false) {
