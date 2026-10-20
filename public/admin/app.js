@@ -371,10 +371,6 @@ async function invertPngColors(data, fillWhiteBackground = false) {
     canvas.height = image.naturalHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('This browser could not create the inverted QR artwork.');
-    if (fillWhiteBackground) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
     ctx.drawImage(image, 0, 0);
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
     for (let index = 0; index < pixels.data.length; index += 4) {
@@ -383,7 +379,18 @@ async function invertPngColors(data, fillWhiteBackground = false) {
       pixels.data[index + 2] = 255 - pixels.data[index + 2];
     }
     ctx.putImageData(pixels, 0, 0);
-    const blob = await canvasToBlob(canvas);
+    let outputCanvas = canvas;
+    if (fillWhiteBackground) {
+      outputCanvas = document.createElement('canvas');
+      outputCanvas.width = canvas.width;
+      outputCanvas.height = canvas.height;
+      const outputCtx = outputCanvas.getContext('2d');
+      if (!outputCtx) throw new Error('This browser could not create the inverted QR sheet.');
+      outputCtx.fillStyle = '#ffffff';
+      outputCtx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+      outputCtx.drawImage(canvas, 0, 0);
+    }
+    const blob = await canvasToBlob(outputCanvas);
     return new Uint8Array(await blob.arrayBuffer());
   } finally {
     if (!isDataUrl) URL.revokeObjectURL(src);
