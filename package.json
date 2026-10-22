@@ -11,7 +11,8 @@
     "backup:deploy": "wrangler deploy --config wrangler.backup.toml",
     "d1:init": "wrangler d1 execute linkr-db --local --file=./migrations/0001_init.sql",
     "d1:init:prod": "wrangler d1 execute linkr-db --remote --file=./migrations/0001_init.sql",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ai:handoff": "node tools/handoff.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
